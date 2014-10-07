@@ -31,7 +31,7 @@ all : $(BIN)
 #
 # Library files
 #
-LIBSRC += async.c coro.c
+LIBSRC += async.c coro.c util/heap.c
 LIBOBJ += $(LIBSRC:.c=.o)
 
 
@@ -62,7 +62,7 @@ clean:
 #
 # Dependency file generation
 #
-SRC=$(wildcard *.c) $(wildcard platform/*.c) $(wildcard test/*.c)
+SRC=$(wildcard *.c) $(wildcard platform/*.c) $(wildcard test/*.c) $(wildcard util/*.c)
 
 OBJ=$(SRC:.c=.o)
 DEP=$(OBJ:.o=.d)
