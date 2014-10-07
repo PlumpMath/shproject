@@ -20,7 +20,9 @@ endif
 
 .PHONY: clean all
 
-TESTS=test test_async
+TESTSRC=$(wildcard test/*.c)
+TESTS=$(TESTSRC:.c=)
+
 BIN=$(TESTS)
 
 all : $(BIN)
@@ -60,7 +62,7 @@ clean:
 #
 # Dependency file generation
 #
-SRC=$(wildcard *.c) $(wildcard platform/*.c)
+SRC=$(wildcard *.c) $(wildcard platform/*.c) $(wildcard test/*.c)
 
 OBJ=$(SRC:.c=.o)
 DEP=$(OBJ:.o=.d)
