@@ -15,6 +15,7 @@ typedef struct {
 
 
 extern int heap_init(heap_t* heap, heap_comparator compare);
+extern void heap_free(heap_t* heap);
 extern int heap_empty(heap_t* heap);
 extern size_t heap_size(heap_t* heap);
 extern int heap_push(heap_t* heap, void* item);

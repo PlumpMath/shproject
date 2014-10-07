@@ -9,7 +9,6 @@ int int_compare(void* left, void* right) {
 }
 
 
-
 int main() {
     heap_t heap;
     int result = heap_init(&heap, int_compare);
@@ -60,4 +59,7 @@ int main() {
     assert(heap_size(&heap) == 0);
     assert(heap_min(&heap) == NULL);
     assert(heap_pop_min(&heap) == NULL);
+
+    heap_free(&heap);
+    return 0;
 }
