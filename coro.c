@@ -19,7 +19,14 @@ static void make_key() {
 }
 
 
-void coroutine_create(coroutine_t* coro, void *(*fn)(void*)) {
+static void trampoline() {
+	coroutine_t* self = coroutine_self();
+	self->start(self->value);
+	assert(0);
+}
+
+
+void coroutine_create(coroutine_t* coro, void *(*start)(void*)) {
 	void* stack = malloc(STACK_SIZE);
 	assert(stack != NULL);
 
@@ -29,7 +36,9 @@ void coroutine_create(coroutine_t* coro, void *(*fn)(void*)) {
 	coro->context.uc_stack.ss_sp = stack;
 	coro->context.uc_stack.ss_size = STACK_SIZE;
 	coro->context.uc_stack.ss_flags = 0;
-	makecontext(&coro->context, (void (*)(void))fn, 0);
+	makecontext(&coro->context, trampoline, 0);
+
+	coro->start = start;
 }
 
 
