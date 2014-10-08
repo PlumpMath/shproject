@@ -46,6 +46,9 @@ int send_all(int sock, const void* buffer, size_t size) {
 void* client_coro(void* unused) {
     static int client_counter = 1;
     int client_num = client_counter++;
+
+    async_sleep_relative(client_num * 100L);
+
     int sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 
     struct sockaddr_in localhost = {0};
