@@ -4,9 +4,13 @@
 #include <coro.h>
 
 #include <sys/socket.h>
+#include <time.h>
 
 
 extern void async_schedule(coroutine_t* coro, void* value);
+
+extern void async_sleep_relative(long millisecs);
+extern void async_sleep_absolute(const struct timespec* time);
 
 extern ssize_t async_read(int fd, void* buf, size_t length);
 extern ssize_t async_write(int fd, void* buf, size_t length);

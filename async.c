@@ -48,6 +48,30 @@ static int socket_errno(int fd) {
 }
 
 
+void async_sleep_relative(long millisecs) {
+    struct timespec now;
+    int result = clock_gettime(CLOCK_REALTIME, &now);
+    assert(result == 0);
+
+    now.tv_sec += millisecs / 1000L;
+    now.tv_nsec += (millisecs % 1000L) * 1000000L;
+    if (now.tv_nsec > 1000000000L) {
+        now.tv_nsec -= 1000000000L;
+        now.tv_sec++;
+    }
+
+    async_sleep_absolute(&now);
+}
+
+
+void async_sleep_absolute(const struct timespec* time) {
+    if (loop == NULL) {
+        loop = new_loop();
+    }
+    event_loop_sleep(loop, time);
+}
+
+
 void async_schedule(coroutine_t* coro, void* value) {
     if (loop == NULL) {
         loop = new_loop();
