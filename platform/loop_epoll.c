@@ -12,6 +12,15 @@
 #include <unistd.h>
 
 
+// TODO: a lot of the things in here aren't epoll/Linux specific and should
+// be moved to some commmon file. Almost everything but the loop body itself
+// could be moved out.
+
+
+/*
+ * Records the file descriptor we are waiting on and the coroutine to switch
+ * back to when we get any events
+ */
 struct wait_data {
     int fd;
     int events;
@@ -19,6 +28,9 @@ struct wait_data {
 };
 
 
+/*
+ * Records the timer timeout and the coroutine to switch to when it expires.
+ */
 struct timer_data {
     const struct timespec* time;
     coroutine_t* coro;
@@ -26,9 +38,12 @@ struct timer_data {
 
 
 static const int MAX_EVENTS = 20;
-static const int MAX_PRE_POLL = 10;
 
 
+/*
+ * Pops the next runnable coroutine from the run list. Returns NULL if the
+ * list is empty.
+ */
 static coroutine_t* next_runnable_coro(event_loop_t* loop) {
     if (list_empty(&loop->run_list)) {
         return NULL;
@@ -38,6 +53,9 @@ static coroutine_t* next_runnable_coro(event_loop_t* loop) {
 }
 
 
+/*
+ * Calculates relative expiration of `timer` in milliseconds.
+ */
 static long timer_expiration(struct timer_data* timer) {
     struct timespec now;
     int result = clock_gettime(CLOCK_REALTIME, &now);
@@ -48,6 +66,10 @@ static long timer_expiration(struct timer_data* timer) {
 }
 
 
+/*
+ * Calculates the timeout we should use for the epoll call. This
+ * is the relative expiration time of the soonest-expiring timer.
+ */
 static long get_timeout_millisecs(event_loop_t* loop) {
     struct timer_data* timer = (struct timer_data*)heap_min(&loop->timer_heap);
     if (timer == NULL) {

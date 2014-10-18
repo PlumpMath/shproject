@@ -49,6 +49,7 @@ static int socket_errno(int fd) {
 
 
 void async_sleep_relative(long millisecs) {
+    // Convert to an absolute timeout
     struct timespec now;
     int result = clock_gettime(CLOCK_REALTIME, &now);
     assert(result == 0);
