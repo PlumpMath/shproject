@@ -1,72 +1,62 @@
 #include <coro.h>
+#include <sched.h>
 
 #include <assert.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ucontext.h>
 
 
 // 8KB stacks
-#define STACK_SIZE 8192
+#define STACK_SIZE 16384
 
 
-static pthread_key_t current_key;
-static pthread_once_t current_once = PTHREAD_ONCE_INIT;
-
-static void make_key() {
-	pthread_key_create(&current_key, NULL);
-}
+__thread coroutine_t* current_coro;
 
 
 static void trampoline() {
-	coroutine_t* self = coroutine_self();
-	self->start(self->value);
-	assert(0);
+    current_coro->start(current_coro->value);
+    __sched_die();
 }
 
 
 void coroutine_create(coroutine_t* coro, void *(*start)(void*)) {
-	void* stack = malloc(STACK_SIZE);
-	assert(stack != NULL);
+    void* stack = malloc(STACK_SIZE);
+    assert(stack != NULL);
 
-	int result = getcontext(&coro->context);
-	assert(result == 0);
+    int result = getcontext(&coro->context);
+    assert(result == 0);
 
-	coro->context.uc_stack.ss_sp = stack;
-	coro->context.uc_stack.ss_size = STACK_SIZE;
-	coro->context.uc_stack.ss_flags = 0;
-	makecontext(&coro->context, trampoline, 0);
+    coro->context.uc_stack.ss_sp = stack;
+    coro->context.uc_stack.ss_size = STACK_SIZE;
+    coro->context.uc_stack.ss_flags = 0;
+    makecontext(&coro->context, trampoline, 0);
 
-	coro->start = start;
+    coro->start = start;
 }
 
 
 void* coroutine_switch(coroutine_t* coro, void* value) {
-	coro->value = value;
-	coroutine_t* self = coroutine_self();
+    coro->value = value;
+    coroutine_t* self = coroutine_self();
+    current_coro = coro;
 
-	pthread_setspecific(current_key, coro);
-	swapcontext(&self->context, &coro->context);
+    swapcontext(&self->context, &coro->context);
 
-	return self->value;
+    return self->value;
 }
 
 
 coroutine_t* coroutine_self() {
-	pthread_once(&current_once, make_key);
+    if (current_coro != NULL) {
+        return current_coro;
+    }
 
-	coroutine_t* self = pthread_getspecific(current_key);
-	if (self != NULL) {
-		return self;
-	}
-
-	self = (coroutine_t*)malloc(sizeof(coroutine_t));
-	assert(self != NULL);
-
-	int result = getcontext(&self->context);
-	assert(result == 0);
-
-	pthread_setspecific(current_key, (void*)self);
-	return self;
+    current_coro = (coroutine_t*)malloc(sizeof(coroutine_t));
+/*
+    // TODO: is this necessary?
+    int result = getcontext(&current_coro->context);
+    assert(result == 0);
+*/
+    return current_coro;
 }

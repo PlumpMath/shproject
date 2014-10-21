@@ -5,7 +5,7 @@
 #include <util/list.h>
 
 
-#ifdef USE_EPOLL
+#ifdef LOOP_EPOLL
 #include <sys/epoll.h>
 
 typedef struct event_loop {

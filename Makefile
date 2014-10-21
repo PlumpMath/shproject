@@ -12,10 +12,26 @@ LDFLAGS =
 #
 UNAME := $(shell uname -s)
 ifeq ($(UNAME), Linux)
-	CFLAGS += -pthread -DUSE_EPOLL -D_XOPEN_SOURCE=700 -D_GNU_SOURCE
-	LDFLAGS += -pthread
-	LIBSRC += platform/loop_epoll.c
+	CFLAGS += -pthread -D_XOPEN_SOURCE=700 -D_GNU_SOURCE
+	LDFLAGS += -pthread -lrt
+	LOOP_EPOLL = 1
+	SCHED_POSIX = 1
 endif
+
+
+#
+# Config for platform dependent options
+#
+ifeq ($(LOOP_EPOLL), 1)
+	LIBSRC += platform/loop_epoll.c
+	CFLAGS += -DLOOP_EPOLL
+endif
+
+ifeq ($(SCHED_POSIX), 1)
+	LIBSRC += platform/sched_posix.c
+	CFLAGS += -DSCHED_POSIX
+endif
+
 
 
 .PHONY: clean all
@@ -31,7 +47,7 @@ all : $(BIN)
 #
 # Library files
 #
-LIBSRC += async.c coro.c util/heap.c
+LIBSRC += async.c coro.c sched.c util/heap.c
 LIBOBJ += $(LIBSRC:.c=.o)
 
 

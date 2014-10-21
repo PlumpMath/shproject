@@ -7,8 +7,8 @@
 
 
 typedef struct {
-	ucontext_t context;
-	void* value;
+    ucontext_t context;
+    void* value;
     void* (*start)(void*);
     struct list_node list;
 } coroutine_t;
