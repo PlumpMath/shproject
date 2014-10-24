@@ -10,19 +10,19 @@
 #include <stdlib.h>
 
 
-typedef struct scheduler {
-    platform_sched_t platform_sched;
+struct scheduler {
+    struct platform_sched platform_sched;
     struct poller poller;
 
     struct list_node run_list;
     struct list_node inactive_list;
 
-    heap_t timer_heap;
+    struct heap timer_heap;
 
-    coroutine_t event_loop_coro;
-    coroutine_t* current_coro;
+    struct coroutine event_loop_coro;
+    struct coroutine* current_coro;
     int lock;
-} scheduler_t;
+};
 
 
 /*
@@ -32,7 +32,7 @@ typedef struct scheduler {
 struct event_wait {
     int fd;
     int events;
-    coroutine_t* coro;
+    struct coroutine* coro;
 };
 
 
@@ -41,35 +41,35 @@ struct event_wait {
  */
 struct timer_wait {
     const struct timespec* time;
-    coroutine_t* coro;
+    struct coroutine* coro;
 };
 
 
 /*
  * Per-thread scheduler instance.
  */
-__thread scheduler_t* scheduler;
+__thread struct scheduler* scheduler;
 
 
 static void* sched_loop(void* arg);
-static void sched_handle_timers(scheduler_t* scheduler);
+static void sched_handle_timers(struct scheduler* scheduler);
 
 
-static inline void sched_block_preempt(scheduler_t* sched) {
+static inline void sched_block_preempt(struct scheduler* sched) {
     assert(!sched->lock);
     sched->lock = 1;
     __sync_synchronize();
 }
 
 
-static inline void sched_unblock_preempt(scheduler_t* sched) {
+static inline void sched_unblock_preempt(struct scheduler* sched) {
     assert(sched->lock);
     sched->lock = 0;
     __sync_synchronize();
 }
 
 
-static inline int sched_can_preempt(scheduler_t* sched) {
+static inline int sched_can_preempt(struct scheduler* sched) {
     return sched->lock == 0;
 }
 
@@ -107,7 +107,7 @@ static long timer_expiration(struct timer_wait* timer) {
  * coroutines on the runlist, the call should not block at all. Otherwise
  * this is the expiration time of the soonest-expiring timer.
  */
-static long sched_poll_timeout(scheduler_t* sched) {
+static long sched_poll_timeout(struct scheduler* sched) {
     if (!list_empty(&sched->run_list)) {
         return 0;
     }
@@ -130,7 +130,7 @@ static void sched_init() {
         return;
     }
 
-    scheduler_t* sched = (scheduler_t*)malloc(sizeof(scheduler_t));
+    struct scheduler* sched = (struct scheduler*)malloc(sizeof(struct scheduler));
 
     // Initialise lists
     list_init(&sched->run_list);
@@ -157,7 +157,7 @@ static void sched_init() {
 
 
 static void* sched_loop(void* arg) {
-    scheduler_t* sched = (scheduler_t*)arg;
+    struct scheduler* sched = (struct scheduler*)arg;
 
     for (;;) {
         long timeout = sched_poll_timeout(sched);
@@ -176,7 +176,7 @@ static void* sched_loop(void* arg) {
 /*
  * Handle expired timers, scheduling coroutines that are now ready to run.
  */
-static void sched_handle_timers(scheduler_t* sched) {
+static void sched_handle_timers(struct scheduler* sched) {
     for (;;) {
         struct timer_wait* timer = (struct timer_wait*)heap_min(
             &sched->timer_heap);
@@ -206,13 +206,13 @@ void sched_reschedule() {
     assert(node != NULL);
 
     // Put the current coroutine back on the run list
-    coroutine_t* self = coroutine_self();
+    struct coroutine* self = coroutine_self();
 
     assert(!list_in_list(&self->list));
     list_push_back(&scheduler->run_list, &self->list);
 
-    coroutine_t* coro = LIST_ITEM(node, coroutine_t, list);
-    coroutine_switch(coro, NULL);
+    struct coroutine* coro = LIST_ITEM(node, struct coroutine, list);
+    coroutine_switch(coro);
 }
 
 
@@ -278,15 +278,15 @@ void sched_suspend() {
 
     struct list_node* node = list_pop_front(&scheduler->run_list);
     assert(node != NULL);
-    coroutine_t* coro = LIST_ITEM(node, coroutine_t, list);
-    coroutine_switch(coro, NULL);
+    struct coroutine* coro = LIST_ITEM(node, struct coroutine, list);
+    coroutine_switch(coro);
 }
 
 
 /*
  * Schedule the given coroutine to run at some point in the future.
  */
-void sched_schedule(coroutine_t* coro) {
+void sched_schedule(struct coroutine* coro) {
     sched_init();
 
     sched_block_preempt(scheduler);

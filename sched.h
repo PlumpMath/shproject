@@ -1,12 +1,11 @@
 #ifndef _SCHED_H
 #define _SCHED_H
 
-#include <coro.h>
-
 #include <stdint.h>
 
 
-// Forward declaration
+// Forward declarations
+struct coroutine;
 struct timespec;
 
 
@@ -14,7 +13,7 @@ struct timespec;
  * Enqueue the given coroutine on the run queue. It will run at some point
  * in the future.
  */
-extern void sched_schedule(coroutine_t* coro);
+extern void sched_schedule(struct coroutine* coro);
 
 
 /*

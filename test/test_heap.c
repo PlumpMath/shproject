@@ -10,7 +10,7 @@ int int_compare(void* left, void* right) {
 
 
 int main() {
-    heap_t heap;
+    struct heap heap;
     int result = heap_init(&heap, int_compare);
     assert(result == 0);
 

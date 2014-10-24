@@ -11,7 +11,7 @@
 #define STACK_SIZE 16384
 
 
-__thread coroutine_t* current_coro;
+__thread struct coroutine* current_coro;
 
 
 static void trampoline() {
@@ -20,7 +20,7 @@ static void trampoline() {
 }
 
 
-void coroutine_create(coroutine_t* coro, void *(*start)(void*), void* value) {
+void coroutine_create(struct coroutine* coro, void *(*start)(void*), void* arg) {
     void* stack = malloc(STACK_SIZE);
     assert(stack != NULL);
 
@@ -33,33 +33,25 @@ void coroutine_create(coroutine_t* coro, void *(*start)(void*), void* value) {
     makecontext(&coro->context, trampoline, 0);
 
     coro->start = start;
-    coro->value = value;
+    coro->value = arg;
 
     list_node_init(&coro->list);
 }
 
 
-void* coroutine_switch(coroutine_t* coro, void* value) {
-    //coro->value = value;
-    coroutine_t* self = coroutine_self();
+void coroutine_switch(struct coroutine* coro) {
+    struct coroutine* self = coroutine_self();
     current_coro = coro;
 
     swapcontext(&self->context, &coro->context);
-
-    return self->value;
 }
 
 
-coroutine_t* coroutine_self() {
+struct coroutine* coroutine_self() {
     if (current_coro != NULL) {
         return current_coro;
     }
 
-    current_coro = (coroutine_t*)malloc(sizeof(coroutine_t));
-/*
-    // TODO: is this necessary?
-    int result = getcontext(&current_coro->context);
-    assert(result == 0);
-*/
+    current_coro = (struct coroutine*)malloc(sizeof(struct coroutine));
     return current_coro;
 }

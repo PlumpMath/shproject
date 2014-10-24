@@ -11,7 +11,7 @@
  * Schedule coroutine `coro` to be run when the current coroutine
  * either finishes or performs a blocking operation.
  */
-extern void async_schedule(coroutine_t* coro, void* value);
+extern void async_schedule(struct coroutine* coro, void* value);
 
 /*
  * Sleep for a relative or absolute time period.

@@ -37,28 +37,7 @@ static void resched_handler(int signo, siginfo_t* info, void* context) {
 }
 
 
-void platform_sched_block(platform_sched_t* platform_sched) {
-    // TODO: adjusting the sigmask might be slow - alternative solution?
-    sigset_t set;
-    sigemptyset(&set);
-    sigaddset(&set, RESCHED_SIG);
-
-    int result = pthread_sigmask(SIG_BLOCK, &set, NULL);
-    assert(result == 0);
-}
-
-
-void platform_sched_unblock(platform_sched_t* platform_sched) {
-    sigset_t set;
-    sigemptyset(&set);
-    sigaddset(&set, RESCHED_SIG);
-
-    int result = pthread_sigmask(SIG_UNBLOCK, &set, NULL);
-    assert(result == 0);
-}
-
-
-int platform_sched_init(platform_sched_t* platform_sched) {
+int platform_sched_init(struct platform_sched* platform_sched) {
     struct sigevent event;
 
     // TODO: Linux only

@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 
-coroutine_t* main_coro;
+struct coroutine* main_coro;
 
 
 void* coro(void* unused) {
@@ -21,7 +21,7 @@ void* coro(void* unused) {
 int main() {
     main_coro = coroutine_self();
 
-    coroutine_t others[5];
+    struct coroutine others[5];
     for (int i = 0; i < 5; i++) {
         coroutine_create(&others[i], coro, NULL);
         sched_schedule(&others[i]);

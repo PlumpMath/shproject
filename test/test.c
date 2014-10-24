@@ -6,32 +6,35 @@
 #include <stdlib.h>
 
 
-coroutine_t* main_coro;
+struct coroutine* main_coro;
 
 
 void* coro(void* unused) {
     printf("Started coroutine\n");
 
-    intptr_t ret = 1;
-    while (1) {
-        ret = (intptr_t)coroutine_switch(main_coro, (void*)(ret + 1));
-        printf("Coroutine 2 got %"PRIdPTR"\n", ret);
-        if (ret >= 200) {
+    for (int i = 0; i < 200; i++) {
+        coroutine_switch(main_coro);
+        printf("Coroutine 2\n");
+        if (i >= 200) {
             exit(0);
         }
     }
+
+    return NULL;
 }
 
 
 int main() {
     main_coro = coroutine_self();
 
-    coroutine_t other;
+    struct coroutine other;
     coroutine_create(&other, coro, NULL);
 
-    intptr_t ret = (intptr_t)coroutine_switch(&other, NULL);
+    coroutine_switch(&other);
     while (1) {
-        printf("Coroutine 1 got %"PRIdPTR"\n", ret);
-        ret = (intptr_t)coroutine_switch(&other, (void*)(ret + 1));
+        printf("Coroutine 1\n");
+        coroutine_switch(&other);
     }
+
+    return 0;
 }

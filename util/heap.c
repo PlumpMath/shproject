@@ -8,7 +8,7 @@
 static const size_t INITIAL_SIZE = 16;
 
 
-int heap_init(heap_t* heap, heap_comparator compare) {
+int heap_init(struct heap* heap, heap_comparator compare) {
     heap->compare = compare;
     heap->heap = (void**)malloc(sizeof(void*) * INITIAL_SIZE);
     heap->size = INITIAL_SIZE;
@@ -21,24 +21,24 @@ int heap_init(heap_t* heap, heap_comparator compare) {
 }
 
 
-void heap_free(heap_t* heap) {
+void heap_free(struct heap* heap) {
     if (heap->heap != NULL) {
         free(heap->heap);
     }
 }
 
 
-int heap_empty(heap_t* heap) {
+int heap_empty(struct heap* heap) {
     return heap->items == 0;
 }
 
 
-size_t heap_size(heap_t* heap) {
+size_t heap_size(struct heap* heap) {
     return heap->items;
 }
 
 
-int heap_push(heap_t* heap, void* item) {
+int heap_push(struct heap* heap, void* item) {
     if (heap->items + 1 >= heap->size) {
         void** new_heap = (void**)realloc(heap->heap,
             heap->size * 2 * sizeof(void*));
@@ -65,7 +65,7 @@ int heap_push(heap_t* heap, void* item) {
 }
 
 
-void* heap_min(heap_t* heap) {
+void* heap_min(struct heap* heap) {
     if (heap->items == 0) {
         return NULL;
     }
@@ -73,7 +73,7 @@ void* heap_min(heap_t* heap) {
 }
 
 
-void* heap_pop_min(heap_t* heap) {
+void* heap_pop_min(struct heap* heap) {
     if (heap->items == 0) {
         return NULL;
     }

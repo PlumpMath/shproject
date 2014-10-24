@@ -124,13 +124,13 @@ void* spinner_coro(void* arg) {
 
 
 int main() {
-    coroutine_t clients[CLIENTS];
+    struct coroutine clients[CLIENTS];
     for (int i = 0; i < CLIENTS; i++) {
         coroutine_create(&clients[i], client_coro, NULL);
         sched_schedule(&clients[i]);
     }
 
-    coroutine_t spinners[1];
+    struct coroutine spinners[1];
     for (int i = 0; i < 1; i++) {
         coroutine_create(&spinners[i], spinner_coro, NULL);
         sched_schedule(&spinners[i]);
@@ -159,7 +159,7 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    coroutine_t handlers[CLIENTS];
+    struct coroutine handlers[CLIENTS];
 
     for (int i = 0; 1; i++) {
         assert(i <= CLIENTS);
