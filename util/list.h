@@ -28,6 +28,12 @@ static inline void list_init(struct list_node* list) {
 }
 
 
+static inline void list_node_init(struct list_node* node) {
+    node->next = NULL;
+    node->prev = NULL;
+}
+
+
 static inline int list_empty(struct list_node* list) {
     assert(list->next != NULL && list->prev != NULL);
     return list->next == list;

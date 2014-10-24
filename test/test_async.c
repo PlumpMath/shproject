@@ -1,5 +1,6 @@
 #include <async.h>
 #include <coro.h>
+#include <sched.h>
 
 #include <errno.h>
 #include <inttypes.h>
@@ -73,7 +74,7 @@ void* client_coro(void* unused) {
     }
 
     while (1) {
-        char buf[30];
+        char buf[64];
         ssize_t num_read = async_recv(sock, buf, sizeof(buf) - 1, 0);
         if (num_read == -1) {
             perror("async_recv (client)");
@@ -91,7 +92,7 @@ void* client_coro(void* unused) {
 void* server_handler_coro(void* sock_ptr) {
     int sock = (int)(intptr_t)sock_ptr;
     while (1) {
-        char buf[30];
+        char buf[64];
         ssize_t num_read = async_recv(sock, buf, sizeof(buf) - 1, 0);
         if (num_read == -1) {
             perror("async_recv (server)");
@@ -113,11 +114,26 @@ void* server_handler_coro(void* sock_ptr) {
 }
 
 
+void* spinner_coro(void* arg) {
+    for (int i = 0; ; i++) {
+        if (i % 100000000 == 0) {
+            printf("Spinner coroutine still spinning\n");
+        }
+    }
+}
+
+
 int main() {
     coroutine_t clients[CLIENTS];
     for (int i = 0; i < CLIENTS; i++) {
-        coroutine_create(&clients[i], client_coro);
-        async_schedule(&clients[i], NULL);
+        coroutine_create(&clients[i], client_coro, NULL);
+        sched_schedule(&clients[i]);
+    }
+
+    coroutine_t spinners[1];
+    for (int i = 0; i < 1; i++) {
+        coroutine_create(&spinners[i], spinner_coro, NULL);
+        sched_schedule(&spinners[i]);
     }
 
     struct sockaddr_in localhost = {0};
@@ -153,7 +169,7 @@ int main() {
             exit(EXIT_FAILURE);
         }
 
-        coroutine_create(&handlers[i], server_handler_coro);
-        async_schedule(&handlers[i], (void*)(intptr_t)new_sock);
+        coroutine_create(&handlers[i], server_handler_coro, (void*)(intptr_t)new_sock);
+        sched_schedule(&handlers[i]);
     }
 }

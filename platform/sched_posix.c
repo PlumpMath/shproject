@@ -12,28 +12,28 @@
 #define sigev_notify_thread_id   _sigev_un._tid
 #endif
 
-
 #define RESCHED_SIG SIGRTMIN
+
+#define TIMESLICE_MILLIS 5
 
 
 static const clockid_t TIMESLICE_CLOCK = CLOCK_REALTIME;
-static const int TIMESLICE_AMOUNT = 50;
 
 
 static const struct itimerspec TIMESLICE = {
     .it_interval = {
         .tv_sec = 0,
-        .tv_nsec = 50000000
+        .tv_nsec = TIMESLICE_MILLIS * 1000000
     },
     .it_value = {
         .tv_sec=  0,
-        .tv_nsec = 50000000
+        .tv_nsec = TIMESLICE_MILLIS * 1000000
     }
 };
 
 
 static void resched_handler(int signo, siginfo_t* info, void* context) {
-    __sched_reschedule_current();
+    sched_reschedule();
 }
 
 

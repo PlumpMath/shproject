@@ -23,7 +23,7 @@ int main() {
 
     coroutine_t others[5];
     for (int i = 0; i < 5; i++) {
-        coroutine_create(&others[i], coro);
+        coroutine_create(&others[i], coro, NULL);
         sched_schedule(&others[i]);
     }
 

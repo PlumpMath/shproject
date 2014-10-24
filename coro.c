@@ -16,11 +16,11 @@ __thread coroutine_t* current_coro;
 
 static void trampoline() {
     current_coro->start(current_coro->value);
-    __sched_die();
+    sched_suspend();  // TODO: leaks coroutine
 }
 
 
-void coroutine_create(coroutine_t* coro, void *(*start)(void*)) {
+void coroutine_create(coroutine_t* coro, void *(*start)(void*), void* value) {
     void* stack = malloc(STACK_SIZE);
     assert(stack != NULL);
 
@@ -33,11 +33,14 @@ void coroutine_create(coroutine_t* coro, void *(*start)(void*)) {
     makecontext(&coro->context, trampoline, 0);
 
     coro->start = start;
+    coro->value = value;
+
+    list_node_init(&coro->list);
 }
 
 
 void* coroutine_switch(coroutine_t* coro, void* value) {
-    coro->value = value;
+    //coro->value = value;
     coroutine_t* self = coroutine_self();
     current_coro = coro;
 

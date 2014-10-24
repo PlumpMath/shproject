@@ -27,7 +27,7 @@ int main() {
     main_coro = coroutine_self();
 
     coroutine_t other;
-    coroutine_create(&other, coro);
+    coroutine_create(&other, coro, NULL);
 
     intptr_t ret = (intptr_t)coroutine_switch(&other, NULL);
     while (1) {

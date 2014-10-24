@@ -23,8 +23,8 @@ endif
 # Config for platform dependent options
 #
 ifeq ($(LOOP_EPOLL), 1)
-	LIBSRC += platform/loop_epoll.c
-	CFLAGS += -DLOOP_EPOLL
+	LIBSRC += platform/poll_epoll.c
+	CFLAGS += -DPOLL_EPOLL
 endif
 
 ifeq ($(SCHED_POSIX), 1)

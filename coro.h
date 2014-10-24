@@ -18,7 +18,7 @@ typedef struct {
  * Initialise a new coroutine in `coro`. The function `start` will
  * be executed when the coroutine is switched to.
  */
-extern void coroutine_create(coroutine_t* coro, void* (*start)(void*));
+extern void coroutine_create(coroutine_t* coro, void* (*start)(void*), void* arg);
 
 /*
  * Switch to coroutine `coro`. The `value` will be passed either to

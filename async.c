@@ -1,6 +1,7 @@
 #include <async.h>
 #include <coro.h>
-#include <platform/loop.h>
+#include <platform/poll.h>
+#include <sched.h>
 #include <util/list.h>
 
 #include <assert.h>
@@ -9,33 +10,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <sys/epoll.h>
 #include <sys/socket.h>
-
-
-static __thread event_loop_t* loop;
-
-
-static event_loop_t* new_loop() {
-    event_loop_t* loop = (event_loop_t*)malloc(sizeof(event_loop_t));
-    assert(loop != NULL);
-
-    int result = event_loop_init(loop);
-    if (result != 0) {
-        perror("event_loop_init");
-        exit(EXIT_FAILURE);
-    }
-
-    return loop;
-}
-
-
-static uint32_t wait(int fd, int events) {
-    if (loop == NULL) {
-        loop = new_loop();
-    }
-    return event_loop_wait(loop, fd, events);
-}
 
 
 static int socket_errno(int fd) {
@@ -61,30 +36,18 @@ void async_sleep_relative(long millisecs) {
         now.tv_sec++;
     }
 
-    async_sleep_absolute(&now);
+    sched_wait(&now);
 }
 
 
 void async_sleep_absolute(const struct timespec* time) {
-    if (loop == NULL) {
-        loop = new_loop();
-    }
-    event_loop_sleep(loop, time);
-}
-
-
-void async_schedule(coroutine_t* coro, void* value) {
-    if (loop == NULL) {
-        loop = new_loop();
-    }
-    coro->value = value;  // bit of a hack
-    event_loop_schedule(loop, coro);
+    sched_wait(time);
 }
 
 
 #define WAIT_RETURN_SOCKET_ERROR(fd, events)                                  \
     do {                                                                      \
-        int revents = wait(fd, events);                                       \
+        int revents = sched_event_wait(fd, events);                           \
         if ((revents & WAITERR) != 0) {                                       \
             errno = socket_errno(fd);                                         \
             return -1;                                                        \
@@ -163,7 +126,7 @@ int async_connect(int socket, const struct sockaddr* address, socklen_t length) 
         return -1;
     }
 
-    wait(socket, WAITOUT);
+    sched_event_wait(socket, WAITOUT);
 
     int error = socket_errno(socket);
     if (error != 0) {
