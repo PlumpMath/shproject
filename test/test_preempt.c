@@ -1,11 +1,8 @@
-#include <coro.h>
 #include <sched.h>
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-
-struct coroutine* main_coro;
 
 
 void* coro(void* unused) {
@@ -19,12 +16,10 @@ void* coro(void* unused) {
 
 
 int main() {
-    main_coro = coroutine_self();
-
-    struct coroutine others[5];
+    struct coroutine* others[5];
     for (int i = 0; i < 5; i++) {
-        coroutine_create(&others[i], coro, NULL);
-        sched_schedule(&others[i]);
+        others[i] = sched_new_coroutine(coro, NULL);
+        assert(others[i] != NULL);
     }
 
     printf("Main finishing\n");

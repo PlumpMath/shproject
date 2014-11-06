@@ -33,7 +33,7 @@ static const struct itimerspec TIMESLICE = {
 
 
 static void resched_handler(int signo, siginfo_t* info, void* context) {
-    sched_reschedule();
+    sched_resched_callback();
 }
 
 

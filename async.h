@@ -1,17 +1,9 @@
 #ifndef _ASYNC_H
 #define _ASYNC_H
 
-#include <coro.h>
-
 #include <sys/socket.h>
 #include <time.h>
 
-
-/*
- * Schedule coroutine `coro` to be run when the current coroutine
- * either finishes or performs a blocking operation.
- */
-extern void async_schedule(struct coroutine* coro, void* value);
 
 /*
  * Sleep for a relative or absolute time period.

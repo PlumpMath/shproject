@@ -1,7 +1,7 @@
 #include <async.h>
-#include <coro.h>
 #include <sched.h>
 
+#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <stdint.h>
@@ -124,16 +124,16 @@ void* spinner_coro(void* arg) {
 
 
 int main() {
-    struct coroutine clients[CLIENTS];
+    struct coroutine* clients[CLIENTS];
     for (int i = 0; i < CLIENTS; i++) {
-        coroutine_create(&clients[i], client_coro, NULL);
-        sched_schedule(&clients[i]);
+        clients[i] = sched_new_coroutine(client_coro, NULL);
+        assert(clients[i] != NULL);
     }
 
-    struct coroutine spinners[1];
+    struct coroutine* spinners[1];
     for (int i = 0; i < 1; i++) {
-        coroutine_create(&spinners[i], spinner_coro, NULL);
-        sched_schedule(&spinners[i]);
+        spinners[i] = sched_new_coroutine(spinner_coro, NULL);
+        assert(spinners[i] != NULL);
     }
 
     struct sockaddr_in localhost = {0};
@@ -159,7 +159,7 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    struct coroutine handlers[CLIENTS];
+    struct coroutine* handlers[CLIENTS];
 
     for (int i = 0; 1; i++) {
         assert(i <= CLIENTS);
@@ -169,7 +169,7 @@ int main() {
             exit(EXIT_FAILURE);
         }
 
-        coroutine_create(&handlers[i], server_handler_coro, (void*)(intptr_t)new_sock);
-        sched_schedule(&handlers[i]);
+        handlers[i] = sched_new_coroutine(server_handler_coro, (void*)(intptr_t)new_sock);
+        assert(handlers[i] != NULL);
     }
 }

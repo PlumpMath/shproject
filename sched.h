@@ -10,6 +10,13 @@ struct timespec;
 
 
 /*
+ * Create a new coroutine which will execute the given function, passing
+ * start as the first argument.
+ */
+extern struct coroutine* sched_new_coroutine(void* (*start)(void*), void* arg);
+
+
+/*
  * Enqueue the given coroutine on the run queue. It will run at some point
  * in the future.
  */
@@ -26,6 +33,12 @@ extern void sched_wait(const struct timespec* timeout);
  * Suspend the calling coroutine until it is explicitly rescheduled.
  */
 extern void sched_suspend();
+
+
+/*
+ * Reschedule the current coroutine and run another in its place.
+ */
+extern void sched_resched();
 
 
 /*
@@ -51,7 +64,7 @@ extern void sched_poll_event(void* key, uint32_t revents);
 /*
  * Called by the platform scheduler to schedule the next coroutine.
  */
-extern void sched_reschedule();
+extern void sched_resched_callback();
 
 
 #endif

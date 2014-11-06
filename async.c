@@ -1,5 +1,4 @@
 #include <async.h>
-#include <coro.h>
 #include <platform/poll.h>
 #include <sched.h>
 #include <util/list.h>
