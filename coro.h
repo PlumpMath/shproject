@@ -6,10 +6,10 @@
 #include <ucontext.h>
 
 
-struct coroutine {
+struct context {
     ucontext_t context;
-    void* value;
     void* (*start)(void*);
+    void* value;
     struct list_node list;
 };
 
@@ -18,22 +18,14 @@ struct coroutine {
  * Initialise a new coroutine in `coro`. The function `start` will
  * be executed when the coroutine is switched to.
  */
-extern void coroutine_create(struct coroutine* coro, void* (*start)(void*), void* arg);
+extern void context_create(struct context* context, void (*start)(void));
 
 
 /*
  * Switch to the given coroutine. The function will return when the calling
  * coroutine is switched back to.
  */
-extern void coroutine_switch(struct coroutine* coro);
-
-
-/*
- * Returns a pointer to the current coroutine. If the current thread
- * of execution does not correspond to a coroutine, a new coroutine
- * representing it is returned.
- */
-extern struct coroutine* coroutine_self();
+extern void context_switch(struct context* from, struct context* to);
 
 
 #endif
