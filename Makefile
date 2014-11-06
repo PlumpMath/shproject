@@ -47,7 +47,7 @@ all : $(BIN)
 #
 # Library files
 #
-LIBSRC += async.c coro.c sched.c util/heap.c
+LIBSRC += async.c context.c sched.c util/heap.c
 LIBOBJ += $(LIBSRC:.c=.o)
 
 
