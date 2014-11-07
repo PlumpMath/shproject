@@ -8,9 +8,6 @@
 
 struct context {
     ucontext_t context;
-    void* (*start)(void*);
-    void* value;
-    struct list_node list;
 };
 
 
