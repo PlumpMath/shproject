@@ -363,11 +363,11 @@ static void sched_switch_context_locked(struct scheduler* sched, struct coroutin
 }
 
 
-void sched_suspend_switch(struct scheduler* sched, struct coroutine* coro) {
+void sched_suspend_switch(struct coroutine* coro) {
     sched_init();
-    sched_block_preempt(sched);
-    sched_get_current_locked(sched);
-    sched_switch_context_locked(sched, coro);
+    sched_block_preempt(scheduler);
+    sched_get_current_locked(scheduler);
+    sched_switch_context_locked(scheduler, coro);
 }
 
 
@@ -397,8 +397,9 @@ struct coroutine* sched_new_coroutine(void* (*start)(void*), void* arg) {
     sched_init();
 
     struct coroutine* coro = (struct coroutine*)malloc(sizeof(struct coroutine));
-    list_node_init(&coro->list);
     assert(coro != NULL);
+
+    list_node_init(&coro->list);
 
     context_create(&coro->context, coro_trampoline);
     coro->start = start;
