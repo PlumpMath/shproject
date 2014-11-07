@@ -48,13 +48,6 @@ extern uint32_t sched_event_wait(int fd, uint32_t events);
 
 
 /*
- * Yield the caller's timeslice to the next runnable coroutine (if there
- * is one).
- */
-extern void sched_yield();
-
-
-/*
  * Called by the platform poller when an event occurs on a file descriptor
  * registered with it.
  */
