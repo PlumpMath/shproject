@@ -1,8 +1,16 @@
 CC = gcc
 LD = gcc
 
-CFLAGS = -std=c99 -O2 -MMD -MP -Wall
+CFLAGS = -std=c99 -MMD -MP -Wall
 CPPFLAGS = -I.
+
+
+ifeq ($(DEBUG), 1)
+	CFLAGS += -g
+else
+	CFLAGS += -O2
+endif
+
 
 LDFLAGS =
 
@@ -15,7 +23,7 @@ ifeq ($(UNAME), Linux)
 	CFLAGS += -pthread -D_XOPEN_SOURCE=700 -D_GNU_SOURCE
 	LDFLAGS += -pthread -lrt
 	LOOP_EPOLL = 1
-	SCHED_POSIX = 1
+	SCHED_LINUX = 1
 endif
 
 
@@ -27,9 +35,9 @@ ifeq ($(LOOP_EPOLL), 1)
 	CFLAGS += -DPOLL_EPOLL
 endif
 
-ifeq ($(SCHED_POSIX), 1)
-	LIBSRC += platform/sched_posix.c
-	CFLAGS += -DSCHED_POSIX
+ifeq ($(SCHED_LINUX), 1)
+	LIBSRC += platform/sched_linux.c
+	CFLAGS += -DSCHED_LINUX
 endif
 
 

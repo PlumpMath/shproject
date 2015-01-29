@@ -1,7 +1,8 @@
-#include <sched.h>
+#include <scheduler.h>
 #include <platform/sched.h>
 
 #include <assert.h>
+#include <sched.h>
 #include <signal.h>
 #include <sys/syscall.h>
 #include <time.h>
@@ -37,7 +38,7 @@ static void resched_handler(int signo, siginfo_t* info, void* context) {
 }
 
 
-int platform_sched_init(struct platform_sched* platform_sched) {
+int sched_init_platform(struct platform_sched* platform_sched) {
     struct sigevent event;
 
     // TODO: Linux only
@@ -74,4 +75,12 @@ int platform_sched_init(struct platform_sched* platform_sched) {
     }
 
     return 0;
+}
+
+
+unsigned int sched_cpu_count() {
+    cpu_set_t mask;
+    int result = sched_getaffinity(0, sizeof(mask), &mask);
+    assert(result == 0);
+    return CPU_COUNT(&mask);
 }

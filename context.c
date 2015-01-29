@@ -24,6 +24,12 @@ void context_create(struct context* context, void (*start)(void)) {
 }
 
 
+void context_empty(struct context* context) {
+    int result = getcontext(&context->context);
+    assert(result == 0);
+}
+
+
 void context_switch(struct context* from, struct context* to) {
     swapcontext(&from->context, &to->context);
 }

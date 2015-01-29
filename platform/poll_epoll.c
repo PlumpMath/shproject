@@ -1,5 +1,5 @@
 #include <platform/poll.h>
-#include <sched.h>
+#include <scheduler.h>
 
 #include <assert.h>
 #include <errno.h>

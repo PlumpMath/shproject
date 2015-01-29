@@ -1,6 +1,6 @@
 #include <async.h>
 #include <platform/poll.h>
-#include <sched.h>
+#include <scheduler.h>
 #include <util/list.h>
 
 #include <assert.h>

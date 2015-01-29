@@ -25,4 +25,11 @@ extern void context_create(struct context* context, void (*start)(void));
 extern void context_switch(struct context* from, struct context* to);
 
 
+/*
+ * Get an empty context into which we can store a coroutine state at a later
+ * time.
+ */
+extern void context_empty(struct context* context);
+
+
 #endif
