@@ -1,4 +1,4 @@
-#include <sched.h>
+#include <scheduler.h>
 
 #include <assert.h>
 #include <stdio.h>

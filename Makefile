@@ -55,7 +55,7 @@ all : $(BIN)
 #
 # Library files
 #
-LIBSRC += async.c context.c sched.c util/heap.c
+LIBSRC += async.c context.c scheduler.c util/heap.c
 LIBOBJ += $(LIBSRC:.c=.o)
 
 
