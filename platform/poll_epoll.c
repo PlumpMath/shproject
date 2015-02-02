@@ -32,7 +32,7 @@ int platform_poll_init(struct poller* poller) {
 int platform_poll_register(struct poller* poller, int fd, uint32_t events,
         void* key) {
     struct epoll_event event = {
-        .events = events | EPOLLET,
+        .events = events | EPOLLET | EPOLLONESHOT,
         .data.ptr = key
     };
 

@@ -270,6 +270,7 @@ static struct local_sched* sched_new_local() {
     return local;
 }
 
+
 /*
  * Internal call to initialise the scheduler.
  */
@@ -403,12 +404,21 @@ uint32_t sched_event_wait(int fd, uint32_t events) {
         .events = 0,
         .coro = sched_get_current(lsched)
     };
-    platform_poll_register(&gsched->poller, fd, events, (void*)&wait);
 
-    // TODO: prevent missed wakeup when multiple processors involved
+    int result = platform_poll_register(&gsched->poller, fd, events, (void*)&wait);
+    assert(result == 0);
+
+    // TODO: there would be a missed wake up problem here, but since at the
+    // moment our coroutines are suspended simply by not requeueing them
+    // on the runqueue, wake ups aren't missed, as their work (requeueing the
+    // coroutine) won't be undone by sched_suspend.
     sched_suspend(lsched);
 
-    platform_poll_unregister(&gsched->poller, fd);
+    // TODO: potential race between unregistering the fd and another scheduler
+    // receiving an event for the fd and trying to reschedule it. Won't manifest
+    // with epoll because we use EPOLLONESHOT.
+    result = platform_poll_unregister(&gsched->poller, fd);
+    assert(result == 0);
 
     assert(wait.events != 0);
     return wait.events;
