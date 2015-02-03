@@ -24,11 +24,11 @@ static const clockid_t TIMESLICE_CLOCK = CLOCK_REALTIME;
 static const struct itimerspec TIMESLICE = {
     .it_interval = {
         .tv_sec = 0,
-        .tv_nsec = TIMESLICE_MILLIS * 1000000
+        .tv_nsec = TIMESLICE_MILLIS * 1000000L
     },
     .it_value = {
         .tv_sec=  0,
-        .tv_nsec = TIMESLICE_MILLIS * 1000000
+        .tv_nsec = TIMESLICE_MILLIS * 1000000L
     }
 };
 

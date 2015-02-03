@@ -1,6 +1,8 @@
 CC = gcc
 LD = gcc
+AS = gcc
 
+ASFLAGS = -Wall
 CFLAGS = -std=c99 -MMD -MP -Wall
 CPPFLAGS = -I.
 
@@ -18,6 +20,8 @@ LDFLAGS =
 # Override for Windows
 LOCK_POSIX = 1
 
+CONTEXT_GCC_AMD64 = 1
+CFLAGS += -DCONTEXT_GCC_AMD64
 
 #
 # Platform dependent options
@@ -35,12 +39,12 @@ endif
 # Config for platform dependent options
 #
 ifeq ($(LOOP_EPOLL), 1)
-	LIBSRC += platform/poll_epoll.c
+	LIBOBJ += platform/poll_epoll.o
 	CFLAGS += -DPOLL_EPOLL
 endif
 
 ifeq ($(SCHED_LINUX), 1)
-	LIBSRC += platform/sched_linux.c
+	LIBOBJ += platform/sched_linux.o
 	CFLAGS += -DSCHED_LINUX
 endif
 
@@ -63,8 +67,7 @@ all : $(BIN)
 #
 # Library files
 #
-LIBSRC += async.c context.c scheduler.c util/heap.c
-LIBOBJ += $(LIBSRC:.c=.o)
+LIBOBJ += async.o scheduler.o util/heap.o context_gcc_amd64.o
 
 
 #
@@ -86,6 +89,9 @@ clean:
 #
 %.o : %.c
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
+
+%.o : %.S
+	$(AS) -c $(ASFLAGS) $(CPPFLAGS) $< -o $@
 
 % : %.o
 	$(LD) $^ $(LDFLAGS) -o $@

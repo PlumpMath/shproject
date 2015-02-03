@@ -27,7 +27,13 @@ static const size_t DEFAULT_STACK = 4 * 4096;
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 
+#define STATE_RUNNABLE  1
+#define STATE_BLOCKING  2
+#define STATE_BLOCKED   4
+
+
 struct coroutine {
+    volatile int state;
     struct context context;
     struct list_node list;
 
@@ -51,9 +57,6 @@ struct local_sched {
 struct global_sched {
     struct platform_sched platform_sched;
     struct poller poller;
-
-    //struct list_node run_list;
-    //struct list_node inactive_list;
 
     struct heap timer_heap;
 
@@ -87,6 +90,13 @@ struct timer_wait {
 
 
 /*
+ * Our atomic sleep function - implemented in assembly.
+ */
+extern void
+_context_sleep_and_restore(struct arch_context* context, struct coroutine* coro);
+
+
+/*
  * Global scheduler instance.
  */
 static struct global_sched* gsched = NULL;
@@ -105,6 +115,7 @@ static struct coroutine* sched_dequeue_locked(struct local_sched* sched);
 static void sched_enqueue_locked(struct local_sched* sched, struct coroutine* coro);
 
 static struct coroutine* sched_get_current(struct local_sched* sched);
+static void sched_prepare_to_suspend();
 
 
 static inline void sched_block_preempt(struct local_sched* sched) {
@@ -198,10 +209,6 @@ static struct global_sched* sched_new_global(unsigned int thread_count) {
         thread_count * sizeof(struct local_sched*)
     );
 
-    // Initialise lists
-    // list_init(&global->run_list);
-    // list_init(&global->inactive_list);
-
     int result = heap_init(&global->timer_heap, timer_compare);
     assert(result == 0);
 
@@ -274,7 +281,7 @@ static void sched_init() {
     local->event_loop_coro = sched_make_coro(sched_loop, local);
     assert(local->event_loop_coro != NULL);
 
-    list_push_back(&local->run_list, &local->event_loop_coro->list);
+    sched_enqueue_locked(local, local->event_loop_coro);
 
     //result = platform_sched_init(&sched->platform_sched);
     //assert(result == 0);
@@ -381,14 +388,12 @@ uint32_t sched_event_wait(int fd, uint32_t events) {
         .coro = sched_get_current(lsched)
     };
 
+    sched_prepare_to_suspend();
+
     int result = platform_poll_register(&gsched->poller, fd, events, (void*)&wait);
     assert(result == 0);
 
-    // TODO: there would be a missed wake up problem here, but since at the
-    // moment our coroutines are suspended simply by not requeueing them
-    // on the runqueue, wake ups aren't missed, as their work (requeueing the
-    // coroutine) won't be undone by sched_suspend.
-    sched_suspend(lsched);
+    sched_suspend();
 
     // TODO: potential race between unregistering the fd and another scheduler
     // receiving an event for the fd and trying to reschedule it. Won't manifest
@@ -424,6 +429,8 @@ void sched_wait(const struct timespec* time) {
         .coro = sched_get_current(lsched)
     };
 
+    sched_prepare_to_suspend();
+
     glock();
     int result = heap_push(&gsched->timer_heap, (void*)&wait);
     gunlock();
@@ -434,17 +441,47 @@ void sched_wait(const struct timespec* time) {
 }
 
 
+static void sched_prepare_to_suspend() {
+    struct coroutine* coro = sched_get_current(lsched);
+    __atomic_store_n(&coro->state, STATE_BLOCKING, __ATOMIC_RELEASE);
+}
+
+
 /*
  * Schedule another coroutine; don't reschedule this one.
  */
 void sched_suspend() {
     sched_init();
 
-    slock();
-    struct coroutine* coro = sched_dequeue_locked(lsched);
-    sunlock();
+    struct coroutine* current = sched_get_current(lsched);
 
-    sched_switch_context(lsched, coro);
+    bool switched_back = context_save(&current->context);
+    if (!switched_back) {
+        slock();
+        struct coroutine* coro = sched_dequeue_locked(lsched);
+        sunlock();
+
+        sched_block_preempt(lsched);
+
+        lsched->current_coro = coro;
+
+        // We need to set our state to BLOCKED and sleep. After setting
+        // BLOCKED, another scheduler can schedule the coroutine, reusing
+        // this stack space.
+        // Therefore we use a special assembly function to do the context
+        // switch that doesn't use the stack.
+        _context_sleep_and_restore(&coro->context.arch, current);
+
+        // If we get here -- it means another scheduler awoke the coroutine
+        // right before it got to sleep. We need to reschedule the one we were
+        // about to switch to, and correct the current coroutine pointer.
+        lsched->current_coro = current;
+        slock();
+        sched_enqueue_locked(lsched, coro);
+        sunlock();
+    }
+
+    sched_unblock_preempt(lsched);
 }
 
 
@@ -453,6 +490,17 @@ void sched_suspend() {
  */
 void sched_schedule(struct coroutine* coro) {
     sched_init();
+
+    int previous_state = __atomic_exchange_n(&coro->state, STATE_RUNNABLE,
+        __ATOMIC_ACQ_REL);
+
+    if (previous_state != STATE_BLOCKED) {
+        // We might have raced with another waker, or the even the coroutine
+        // going to sleep. In this case we don't need to do anything -- the
+        // sleeping coroutine will catch our wake up when it tries to xchg
+        // STATE_BLOCKED.
+        return;
+    }
 
     slock();
     sched_enqueue_locked(lsched, coro);
@@ -553,7 +601,8 @@ static struct coroutine* sched_make_coro(void* (*start)(void*), void* arg) {
 
     list_node_init(&coro->list);
 
-    context_create(&coro->context, coro_trampoline);
+    context_create(&coro->context, coro_trampoline, DEFAULT_STACK);
+    coro->state = STATE_BLOCKED;
     coro->start = start;
     coro->arg = arg;
     return coro;
@@ -583,6 +632,7 @@ fast_path:
     gsched->local_schedulers[slot] = local;
 
     // We don't need to lock the local either.
+    coro->state = STATE_RUNNABLE;
     sched_enqueue_locked(local, coro);
     sched_local_start_thread(local);
     return coro;
