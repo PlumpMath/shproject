@@ -15,6 +15,10 @@ endif
 LDFLAGS =
 
 
+# Override for Windows
+LOCK_POSIX = 1
+
+
 #
 # Platform dependent options
 #
@@ -38,6 +42,10 @@ endif
 ifeq ($(SCHED_LINUX), 1)
 	LIBSRC += platform/sched_linux.c
 	CFLAGS += -DSCHED_LINUX
+endif
+
+ifeq ($(LOCK_POSIX), 1)
+	CFLAGS += -DLOCK_POSIX
 endif
 
 

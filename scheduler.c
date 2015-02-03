@@ -1,5 +1,6 @@
 #include <context.h>
 #include <scheduler.h>
+#include <platform/lock.h>
 #include <platform/poll.h>
 #include <platform/sched.h>
 #include <util/heap.h>
@@ -16,31 +17,10 @@
 static const size_t DEFAULT_STACK = 4 * 4096;
 
 
-// Temporary
-
-#define glock()                                        \
-    do {                                               \
-        int __r = pthread_mutex_lock(&gsched->lock);   \
-        assert(__r == 0);                              \
-    } while (0)
-
-#define gunlock()                                      \
-    do {                                               \
-        int __r = pthread_mutex_unlock(&gsched->lock); \
-        assert(__r == 0);                              \
-    } while (0)
-
-#define slock()                                        \
-    do {                                               \
-        int __r = pthread_mutex_lock(&lsched->lock);   \
-        assert(__r == 0);                              \
-    } while (0)
-
-#define sunlock()                                      \
-    do {                                               \
-        int __r = pthread_mutex_unlock(&lsched->lock); \
-        assert(__r == 0);                              \
-    } while (0)
+#define glock()     mutex_lock(&gsched->lock)
+#define gunlock()   mutex_unlock(&gsched->lock)
+#define slock()     mutex_lock(&lsched->lock)
+#define sunlock()   mutex_unlock(&lsched->lock)
 
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -63,10 +43,8 @@ struct local_sched {
     struct coroutine* current_coro;
     struct coroutine* event_loop_coro;
 
-    int get_current_count;
-
     unsigned int preempt_lock;
-    pthread_mutex_t lock;
+    struct mutex lock;
 };
 
 
@@ -79,7 +57,7 @@ struct global_sched {
 
     struct heap timer_heap;
 
-    pthread_mutex_t lock;
+    struct mutex lock;
 
     unsigned int local_size;
     unsigned int local_count;
@@ -199,7 +177,7 @@ static void sched_local_start_thread(struct local_sched* local) {
     int result = pthread_attr_init(&thread_attr);
     assert(result == 0);
 
-    size_t stack_size = PTHREAD_STACK_MIN * 4;
+    size_t stack_size = MAX(DEFAULT_STACK, PTHREAD_STACK_MIN);
     result = pthread_attr_setstacksize(&thread_attr, stack_size);
     assert(result == 0);
 
@@ -234,8 +212,7 @@ static struct global_sched* sched_new_global(unsigned int thread_count) {
     global->local_size = thread_count;
     global->local_count = 0;
 
-    result = pthread_mutex_init(&global->lock, NULL);
-    assert(result == 0);
+    mutex_init(&global->lock);
 
     result = platform_poll_init(&global->poller);
     assert(result == 0);
@@ -250,8 +227,7 @@ static struct local_sched* sched_new_local() {
     );
     assert(local != NULL);
 
-    int result = pthread_mutex_init(&local->lock, NULL);
-    assert(result == 0);
+    mutex_init(&local->lock);
 
     local->preempt_lock = 0;
 
