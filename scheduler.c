@@ -33,7 +33,7 @@ static const size_t DEFAULT_STACK = 8 * 4096;
 
 
 struct coroutine {
-    volatile int state;
+    int state;
     struct context context;
     struct list_node list;
 
@@ -92,13 +92,6 @@ struct timer_wait {
 
 
 /*
- * Our atomic sleep function - implemented in assembly.
- */
-extern void
-_context_sleep_and_restore(struct context* context, struct coroutine* coro);
-
-
-/*
  * Global scheduler instance.
  */
 static struct global_sched* gsched = NULL;
@@ -107,6 +100,7 @@ static struct global_sched* gsched = NULL;
  * Local per-thread scheduler instance.
  */
 static __thread struct local_sched* lsched = NULL;
+
 
 static struct coroutine* sched_make_coro(void* (*start)(void*), void* arg);
 static void* sched_loop(void* arg);
@@ -478,7 +472,8 @@ void sched_suspend() {
         // this stack space.
         // Therefore we use a special assembly function to do the context
         // switch that doesn't use the stack.
-        _context_sleep_and_restore(&coro->context, current);
+        context_cmpxchg_restore(&coro->context, &current->state, STATE_BLOCKING,
+            STATE_BLOCKED);
 
         // If we get here -- it means another scheduler awoke the coroutine
         // right before it got to sleep. We need to reschedule the one we were

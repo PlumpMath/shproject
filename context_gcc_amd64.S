@@ -7,9 +7,6 @@
     symbol
 
 
-#include <scheduler_defs.h>
-
-
 FUNCTION(_context_create):
     // Store the function pointer in PC
     movq %rsi, 56(%rdi);
@@ -22,7 +19,7 @@ FUNCTION(_context_create):
     ret;
 
 
-FUNCTION(_context_save):
+FUNCTION(context_save):
     // Save all callee-saves into the context
     movq %rbx, 0(%rdi);
     movq %rbp, 8(%rdi);
@@ -39,7 +36,7 @@ FUNCTION(_context_save):
     ret;
 
 
-FUNCTION(_context_restore):
+FUNCTION(context_restore):
     // Restore all the callee-saved registers
     movq 0(%rdi), %rbx;
     movq 8(%rdi), %rbp;
@@ -57,10 +54,8 @@ FUNCTION(_context_restore):
     ret;
 
 
-FUNCTION(_context_sleep_and_restore):
-    movl  $STATE_BLOCKED, %eax;
-    xchg  %eax, 0(%rsi);
-    testl $STATE_RUNNABLE, %eax;
-    jz _context_restore
-    movl  $STATE_RUNNABLE, 0(%rsi);
+FUNCTION(context_cmpxchg_restore):
+    movl %edx, %eax;
+    lock cmpxchg %ecx, 0(%rsi);
+    jz   context_restore;
     ret;

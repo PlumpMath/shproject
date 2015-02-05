@@ -18,8 +18,6 @@ struct context {
 
 
 extern void _context_create(struct context*, void (*fn)(void*), void* stack_top);
-extern int _context_save(struct context*);
-extern void _context_restore(struct context*);
 
 
 /*
@@ -35,14 +33,41 @@ context_create(struct context* context, void (*fn)(void*), size_t stack_size) {
 
 
 /*
+ * Save the current execution state into the given context.
+ * Returns false when first called. Returns true when the context is later
+ * restored with context_restore.
+ */
+extern int context_save(struct context*);
+
+
+/*
+ * Restores a context previously saved with a call to context_save. Control
+ * flow will be transfered to the original call to context_save, and that
+ * function will return true.
+ */
+extern void context_restore(struct context*) __attribute__((noreturn));
+
+
+/*
+ * Atomically tests that the value at address is equal to the old value, and
+ * if so sets it to new value.
+ *
+ * If the test and set succeeds, the context is restored and the function does
+ * not return.
+ * Otherwise, the value at address is unchanged, and the value is returned.
+ */
+extern int context_cmpxchg_restore(struct context* context, int* address,
+    int old, int new);
+
+
+/*
  * Switch to the given coroutine. The function will return when the calling
  * coroutine is switched back to.
  */
-static inline void
-context_switch(struct context* from, struct context* to) {
-    int switched = _context_save(from);
+static inline void context_switch(struct context* from, struct context* to) {
+    int switched = context_save(from);
     if (switched == 0) {
-        _context_restore(to);
+        context_restore(to);
     }
 }
 
@@ -52,28 +77,6 @@ context_switch(struct context* from, struct context* to) {
  * time.
  */
 static inline void context_empty(struct context* context) {
-}
-
-
-/*
- * Save the current execution state into the given context.
- * Returns false when first called. Returns true when the context is later
- * restored with context_restore.
- */
-static inline bool context_save(struct context* context) {
-    return _context_save(context) != 0;
-}
-
-
-/*
- * Restores a context previously saved with a call to context_save. Control
- * flow will be transfered to the original call to context_save, and that
- * function will return true.
- */
-static inline void context_restore(struct context* context) __attribute__ ((noreturn));
-
-static inline void context_restore(struct context* context) {
-    _context_restore(context);
 }
 
 
