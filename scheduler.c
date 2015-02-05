@@ -14,7 +14,7 @@
 #include <stdlib.h>
 
 
-static const size_t DEFAULT_STACK = 4 * 4096;
+static const size_t DEFAULT_STACK = 8 * 4096;
 
 
 #define glock()     mutex_lock(&gsched->lock)
@@ -51,11 +51,13 @@ struct local_sched {
 
     unsigned int preempt_lock;
     struct mutex lock;
+
+    struct platform_sched platform_sched;
+    bool platform_sched_initialised;
 };
 
 
 struct global_sched {
-    struct platform_sched platform_sched;
     struct poller poller;
 
     struct heap timer_heap;
@@ -250,6 +252,7 @@ static struct local_sched* sched_new_local() {
     list_node_init(&coro->list);
     local->current_coro = coro;
 
+    local->platform_sched_initialised = false;
     return local;
 }
 
@@ -262,7 +265,7 @@ static void sched_init() {
         return;
     }
 
-    unsigned int cpu_count = sched_cpu_count();
+    unsigned int cpu_count = platform_sched_cpu_count();
     struct global_sched* global = sched_new_global(cpu_count);
     assert(global != NULL);
 
@@ -283,14 +286,20 @@ static void sched_init() {
 
     sched_enqueue_locked(local, local->event_loop_coro);
 
-    //result = platform_sched_init(&sched->platform_sched);
-    //assert(result == 0);
+    int result = platform_sched_init(&local->platform_sched);
+    assert(result == 0);
+    local->platform_sched_initialised = true;
 }
 
 
 static void* sched_loop(void* arg) {
     struct local_sched* sched = (struct local_sched*)arg;
     lsched = sched;  // Set the local scheduler for this thread in TLS.
+
+    if (!sched->platform_sched_initialised) {
+        int result = platform_sched_init(&sched->platform_sched);
+        assert(result == 0);
+    }
 
     for (;;) {
         long timeout = sched_poll_timeout(gsched, sched);
@@ -364,7 +373,6 @@ void sched_resched() {
         sunlock();
         return;
     }
-
     struct coroutine* current = sched_get_current(lsched);
     sched_enqueue_locked(lsched, current);
     struct coroutine* coro = sched_dequeue_locked(lsched);
@@ -591,6 +599,7 @@ static void coro_trampoline() {
     sched_unblock_preempt(lsched);
     coro->start(coro->arg);
 
+    sched_prepare_to_suspend();
     sched_suspend();  // TODO: need a mechanism to free coroutine resources
 }
 

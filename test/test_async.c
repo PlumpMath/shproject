@@ -12,8 +12,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-
-static const int CLIENTS = 100;
+static const int CLIENTS = 500;
 
 static const short PORT = 51234;
 
@@ -48,7 +47,7 @@ void* client_coro(void* unused) {
     static int client_counter = 1;
     int client_num = client_counter++;
 
-    async_sleep_relative(client_num * 100L);
+    async_sleep_relative(client_num * 10L);
 
     int sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 
@@ -115,24 +114,19 @@ void* server_handler_coro(void* sock_ptr) {
 
 
 void* spinner_coro(void* arg) {
-    for (int i = 0; ; i++) {
-        if (i % 100000000 == 0) {
-            printf("Spinner coroutine still spinning\n");
+    intptr_t spinner_num = (intptr_t)arg;
+    for (long i = 0; ; i++) {
+        if (i % 1000000000L == 0) {
+            printf("Spinner %"PRIdPTR" still spinning\n", spinner_num);
         }
     }
 }
 
 
 int main() {
-    struct coroutine* clients[CLIENTS];
-    for (int i = 0; i < CLIENTS; i++) {
-        clients[i] = sched_new_coroutine(client_coro, NULL);
-        assert(clients[i] != NULL);
-    }
-
-    struct coroutine* spinners[1];
-    for (int i = 0; i < 1; i++) {
-        spinners[i] = sched_new_coroutine(spinner_coro, NULL);
+    struct coroutine* spinners[64];
+    for (int i = 0; i < 64; i++) {
+        spinners[i] = sched_new_coroutine(spinner_coro, (void*)(intptr_t)i);
         assert(spinners[i] != NULL);
     }
 
@@ -157,6 +151,12 @@ int main() {
     if (result == -1) {
         perror("listen");
         exit(EXIT_FAILURE);
+    }
+
+    struct coroutine* clients[CLIENTS];
+    for (int i = 0; i < CLIENTS; i++) {
+        clients[i] = sched_new_coroutine(client_coro, NULL);
+        assert(clients[i] != NULL);
     }
 
     struct coroutine* handlers[CLIENTS];
