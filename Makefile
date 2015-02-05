@@ -34,7 +34,7 @@ endif
 
 ARCH := $(shell uname -m)
 ifeq ($(ARCH), x86_64)
-	LIBOBJ += context_gcc_amd64.o
+	LIBOBJ += arch/context_gcc_amd64.o
 	CFLAGS += -DCONTEXT_GCC_AMD64
 endif
 
