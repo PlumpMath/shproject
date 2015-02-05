@@ -414,9 +414,11 @@ uint32_t sched_event_wait(int fd, uint32_t events) {
  */
 void sched_poll_event(void* key, uint32_t revents) {
     struct event_wait* wait = (struct event_wait*)key;
-    wait->events = revents;
-
-    sched_schedule(wait->coro);
+    struct coroutine* coro = __atomic_exchange_n(&wait->coro, NULL, __ATOMIC_ACQ_REL);
+    if (coro != NULL) {
+        wait->events = revents;
+        sched_schedule(coro);
+    }
 }
 
 
