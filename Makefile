@@ -20,9 +20,6 @@ LDFLAGS =
 # Override for Windows
 LOCK_POSIX = 1
 
-CONTEXT_GCC_AMD64 = 1
-CFLAGS += -DCONTEXT_GCC_AMD64
-
 #
 # Platform dependent options
 #
@@ -32,6 +29,13 @@ ifeq ($(UNAME), Linux)
 	LDFLAGS += -pthread -lrt
 	LOOP_EPOLL = 1
 	SCHED_LINUX = 1
+endif
+
+
+ARCH := $(shell uname -m)
+ifeq ($(ARCH), x86_64)
+	LIBOBJ += context_gcc_amd64.o
+	CFLAGS += -DCONTEXT_GCC_AMD64
 endif
 
 
@@ -67,7 +71,7 @@ all : $(BIN)
 #
 # Library files
 #
-LIBOBJ += async.o scheduler.o util/heap.o context_gcc_amd64.o
+LIBOBJ += async.o scheduler.o util/heap.o
 
 
 #

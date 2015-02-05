@@ -8,19 +8,18 @@
 #include <stdlib.h>
 
 
-#ifdef CONTEXT_GCC_AMD64
-#include <context_gcc_amd64.h>
-#endif
-
-
 struct context {
-    struct arch_context arch;
+#ifdef CONTEXT_GCC_AMD64
+    long regs[8];
+#else
+#   error Missing context definition for architecture!
+#endif
 };
 
 
-extern void _context_create(struct arch_context*, void (*fn)(void*), void* stack_top);
-extern int _context_save(struct arch_context*);
-extern void _context_restore(struct arch_context*);
+extern void _context_create(struct context*, void (*fn)(void*), void* stack_top);
+extern int _context_save(struct context*);
+extern void _context_restore(struct context*);
 
 
 /*
@@ -31,7 +30,7 @@ static inline void
 context_create(struct context* context, void (*fn)(void*), size_t stack_size) {
     void* stack = malloc(stack_size);
     assert(stack != NULL);
-    _context_create(&context->arch, fn, (void*)((uintptr_t)stack + stack_size));
+    _context_create(context, fn, (void*)((uintptr_t)stack + stack_size));
 }
 
 
@@ -41,9 +40,9 @@ context_create(struct context* context, void (*fn)(void*), size_t stack_size) {
  */
 static inline void
 context_switch(struct context* from, struct context* to) {
-    int switched = _context_save(&from->arch);
+    int switched = _context_save(from);
     if (switched == 0) {
-        _context_restore(&to->arch);
+        _context_restore(to);
     }
 }
 
@@ -52,7 +51,8 @@ context_switch(struct context* from, struct context* to) {
  * Get an empty context into which we can store a coroutine state at a later
  * time.
  */
-static inline void context_empty(struct context* context) { }
+static inline void context_empty(struct context* context) {
+}
 
 
 /*
@@ -61,7 +61,7 @@ static inline void context_empty(struct context* context) { }
  * restored with context_restore.
  */
 static inline bool context_save(struct context* context) {
-    return _context_save(&context->arch) != 0;
+    return _context_save(context) != 0;
 }
 
 
@@ -73,7 +73,7 @@ static inline bool context_save(struct context* context) {
 static inline void context_restore(struct context* context) __attribute__ ((noreturn));
 
 static inline void context_restore(struct context* context) {
-    _context_restore(&context->arch);
+    _context_restore(context);
 }
 
 

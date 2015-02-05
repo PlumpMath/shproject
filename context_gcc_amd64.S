@@ -1,16 +1,13 @@
 .text
 
 
-#define FUNCTION(sym)               \
-    .globl sym;                     \
-    .type sym, @function;           \
-    sym
+#define FUNCTION(symbol)               \
+    .globl symbol;                     \
+    .type symbol, @function;           \
+    symbol
 
 
-// TODO: should get from header
-#define STATE_RUNNABLE  1
-#define STATE_BLOCKING  2
-#define STATE_BLOCKED   4
+#include <scheduler_defs.h>
 
 
 FUNCTION(_context_create):

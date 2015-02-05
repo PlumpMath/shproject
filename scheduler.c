@@ -95,7 +95,7 @@ struct timer_wait {
  * Our atomic sleep function - implemented in assembly.
  */
 extern void
-_context_sleep_and_restore(struct arch_context* context, struct coroutine* coro);
+_context_sleep_and_restore(struct context* context, struct coroutine* coro);
 
 
 /*
@@ -478,7 +478,7 @@ void sched_suspend() {
         // this stack space.
         // Therefore we use a special assembly function to do the context
         // switch that doesn't use the stack.
-        _context_sleep_and_restore(&coro->context.arch, current);
+        _context_sleep_and_restore(&coro->context, current);
 
         // If we get here -- it means another scheduler awoke the coroutine
         // right before it got to sleep. We need to reschedule the one we were

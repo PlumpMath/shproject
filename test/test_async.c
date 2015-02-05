@@ -12,7 +12,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-static const int CLIENTS = 500;
+static const int CLIENTS = 50;
 
 static const short PORT = 51234;
 
@@ -115,8 +115,8 @@ void* server_handler_coro(void* sock_ptr) {
 
 void* spinner_coro(void* arg) {
     intptr_t spinner_num = (intptr_t)arg;
-    for (long i = 0; ; i++) {
-        if (i % 1000000000L == 0) {
+    for (int i = 0; ; i++) {
+        if (i % 100000000 == 0) {
             printf("Spinner %"PRIdPTR" still spinning\n", spinner_num);
         }
     }
@@ -124,8 +124,8 @@ void* spinner_coro(void* arg) {
 
 
 int main() {
-    struct coroutine* spinners[64];
-    for (int i = 0; i < 64; i++) {
+    struct coroutine* spinners[2];
+    for (int i = 0; i < 2; i++) {
         spinners[i] = sched_new_coroutine(spinner_coro, (void*)(intptr_t)i);
         assert(spinners[i] != NULL);
     }
