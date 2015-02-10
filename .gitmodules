@@ -1,0 +1,3 @@
+[submodule "bench/http-parser"]
+	path = bench/http-parser
+	url = https://github.com/joyent/http-parser
