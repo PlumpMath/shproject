@@ -7,13 +7,19 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include <sys/mman.h>
+
 
 struct context {
-#ifdef CONTEXT_GCC_AMD64
+#if defined(CONTEXT_GCC_AMD64)
     long regs[8];
+#elif defined(CONTEXT_GCC_X86)
+    long regs[6];
 #else
 #   error Missing context definition for architecture!
 #endif
+    void* stack;
+    size_t stack_size;
 };
 
 
@@ -26,8 +32,11 @@ extern void _context_create(struct context*, void (*fn)(void*), void* stack_top)
  */
 static inline void
 context_create(struct context* context, void (*fn)(void*), size_t stack_size) {
-    void* stack = malloc(stack_size);
-    assert(stack != NULL);
+    void* stack = mmap(NULL, stack_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    assert(stack != MAP_FAILED);
+
+    context->stack = stack;
+    context->stack_size = stack_size;
     _context_create(context, fn, (void*)((uintptr_t)stack + stack_size));
 }
 
@@ -77,6 +86,15 @@ static inline void context_switch(struct context* from, struct context* to) {
  * time.
  */
 static inline void context_empty(struct context* context) {
+}
+
+
+/*
+ * Destroy a context, freeing all resources associated with it.
+ */
+static inline void context_free(struct context* context) {
+    int result = munmap(context->stack, context->stack_size);
+    assert(result == 0);
 }
 
 

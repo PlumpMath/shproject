@@ -14,7 +14,7 @@
 #include <stdlib.h>
 
 
-static const size_t DEFAULT_STACK = 8 * 4096;
+static const size_t DEFAULT_STACK = 4 * 4096;
 
 
 #define glock()     mutex_lock(&gsched->lock)
@@ -54,6 +54,8 @@ struct local_sched {
 
     struct platform_sched platform_sched;
     bool platform_sched_initialised;
+
+    char death_stack[4096];
 };
 
 
@@ -587,6 +589,39 @@ void sched_resched_switch(struct coroutine* coro) {
 }
 
 
+static void free_coro() {
+    struct coroutine* coro = lsched->current_coro;
+
+    // Sanity check. We shouldn't be registered for any poll events or timers
+    // either - but we can't check that easily.
+    assert(!list_in_list(&coro->list));
+
+    // Preemption is blocked so this is safe.
+    context_free(&coro->context);
+    free(coro);
+
+    // Get our next coroutine.
+    slock();
+    struct coroutine* next = sched_dequeue_locked(lsched);
+    sunlock();
+
+    lsched->current_coro = next;
+    // The restored context will unblock preemption.
+    context_restore(&next->context);
+}
+
+
+static void sched_coro_die() {
+    // Block preemption for duration of the process, until we switch to
+    // the next coroutine.
+    sched_block_preempt(lsched);
+
+    struct context context;
+    _context_create(&context, free_coro,
+        &lsched->death_stack[0] + sizeof(lsched->death_stack));
+    context_restore(&context);
+}
+
 /*
  * Workaround lack of (pointer) argument passing in some context-switching
  * functions (i.e. ucontext).
@@ -596,8 +631,7 @@ static void coro_trampoline() {
     sched_unblock_preempt(lsched);
     coro->start(coro->arg);
 
-    sched_prepare_to_suspend();
-    sched_suspend();  // TODO: need a mechanism to free coroutine resources
+    sched_coro_die();
 }
 
 
