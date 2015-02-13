@@ -2,9 +2,10 @@ CC = gcc
 LD = gcc
 AS = gcc
 
-ASFLAGS = -Wall
-CFLAGS = -std=c99 -MMD -MP -Wall
-CPPFLAGS = -I.
+
+ASFLAGS += -Wall
+CFLAGS += -std=c99 -MMD -MP -Wall
+CPPFLAGS += -I. -I./bench
 
 
 ifeq ($(DEBUG), 1)
@@ -31,11 +32,19 @@ ifeq ($(UNAME), Linux)
 	SCHED_LINUX = 1
 endif
 
+#
+# Allow architecture to be overriden by environment variables.
+#
+ifndef ARCH
+	ARCH := $(shell uname -m)
+endif
 
-ARCH := $(shell uname -m)
 ifeq ($(ARCH), x86_64)
 	LIBOBJ += arch/context_gcc_amd64.o
 	CFLAGS += -DCONTEXT_GCC_AMD64
+else ifeq ($(ARCH), x86)
+	LIBOBJ += arch/context_gcc_x86.o
+	CFLAGS += -DCONTEXT_GCC_X86
 endif
 
 
@@ -60,12 +69,25 @@ endif
 
 .PHONY: clean all
 
+
+BENCHMARKS = bench/webserver/coroserv bench/webserver/threadserv
+
 TESTSRC=$(wildcard test/*.c)
 TESTS=$(TESTSRC:.c=)
 
-BIN=$(TESTS)
+BIN=$(TESTS) $(BENCHMARKS)
 
 all : $(BIN)
+
+
+bench/webserver/coroserv.o : bench/webserver/main.c
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) -DWEBSERVER_COROUTINES $< -o $@
+
+bench/webserver/threadserv.o : bench/webserver/main.c
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) -DWEBSERVER_THREADS $< -o $@
+
+bench/webserver/coroserv : bench/webserver/coroserv.o bench/http-parser/http_parser.o $(LIBOBJ)
+bench/webserver/threadserv : bench/webserver/threadserv.o bench/http-parser/http_parser.o $(LIBOBJ)
 
 
 #
@@ -78,6 +100,7 @@ LIBOBJ += async.o scheduler.o util/heap.o
 # Tests
 #
 $(TESTS): $(LIBOBJ)
+$(BENCHMARKS) : $(LIBOBJ)
 
 
 #
@@ -85,7 +108,6 @@ $(TESTS): $(LIBOBJ)
 #
 clean:
 	rm -f $(BIN) $(OBJ) $(DEP)
-
 
 
 #
@@ -104,7 +126,8 @@ clean:
 #
 # Dependency file generation
 #
-SRC=$(wildcard *.c) $(wildcard platform/*.c) $(wildcard test/*.c) $(wildcard util/*.c)
+SRC=$(wildcard *.c) $(wildcard platform/*.c) $(wildcard test/*.c) $(wildcard util/*.c) \
+	$(wildcard bench/webserver/*.c) $(wildcard bench/http-parser/*.c)
 
 OBJ=$(SRC:.c=.o)
 DEP=$(OBJ:.o=.d)
