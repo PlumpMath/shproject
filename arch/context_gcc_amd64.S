@@ -1,10 +1,6 @@
+#include <arch/gcc_asm.h>
+
 .text
-
-
-#define FUNCTION(symbol)               \
-    .globl symbol;                     \
-    .type symbol, @function;           \
-    symbol
 
 
 FUNCTION(_context_create):
