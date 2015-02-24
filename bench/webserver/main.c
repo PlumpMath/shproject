@@ -35,7 +35,11 @@ int send_all(int sock, const void* buffer, size_t size) {
     const char* buf = (const char*)buffer;
 
     while (size > 0) {
-        ssize_t sent = send(sock, buf, size, 0);
+#if WEBSERVER_COROUTINES
+        ssize_t sent = async_send(sock, buf, size, MSG_NOSIGNAL);
+#else
+        ssize_t sent = send(sock, buf, size, MSG_NOSIGNAL);
+#endif
         if (sent == -1 && errno == EINTR) {
             continue;
         } else if (sent == -1) {
@@ -156,6 +160,10 @@ static void send_http_random(int sock, size_t length, const char* content_type) 
             buffer[i] = '0' + (buffer[i] % ('Z' - '0' + 1));
         }
         int result = send_all(sock, buffer, nread);
+        if (result != 0) {
+            fprintf(stderr, "Write error on sock %d: %s\n", sock, strerror(errno));
+            break;
+        }
         assert(result == 0);
         sent += nread;
     }
@@ -260,7 +268,14 @@ int main() {
         exit_error("server socket()");
     }
 
-    int result = bind(sock, (struct sockaddr*)&localhost, sizeof(localhost));
+    int reuse = 1;
+
+    int result = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+    if (result == -1) {
+        exit_error("setsockopt SO_REUSEADDR");
+    }
+
+    result = bind(sock, (struct sockaddr*)&localhost, sizeof(localhost));
     if (result == -1) {
         exit_error("bind");
         exit(EXIT_FAILURE);
