@@ -179,10 +179,10 @@ const char HTML[] = "<html><head><title>Server</title></head><body><h1>they see 
 void* server_handler_coro(void* sock_ptr) {
     int sock = (int)(intptr_t)sock_ptr;
 
-    http_parser_settings settings = {
-        .on_url = on_url,
-        .on_message_complete = on_done
-    };
+    http_parser_settings settings;
+    http_parser_settings_init(&settings);
+    settings.on_url = on_url;
+    settings.on_message_complete = on_done;
 
     http_parser parser;
     http_parser_init(&parser, HTTP_REQUEST);

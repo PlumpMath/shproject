@@ -6,10 +6,12 @@
 #include <util/heap.h>
 #include <util/list.h>
 
-#include <assert.h>
+#include <errno.h>
 #include <limits.h>
 #include <sched.h>
 #include <pthread.h>
+
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -36,6 +38,8 @@ struct coroutine {
     int state;
     struct context context;
     struct list_node list;
+
+    int private_errno;
 
     void* (*start)(void*);
     void* arg;
@@ -469,7 +473,9 @@ void sched_suspend() {
 
         sched_block_preempt(lsched);
 
+        current->private_errno = errno;
         lsched->current_coro = coro;
+        errno = coro->private_errno;
 
         // We need to set our state to BLOCKED and sleep. After setting
         // BLOCKED, another scheduler can schedule the coroutine, reusing
@@ -483,6 +489,8 @@ void sched_suspend() {
         // right before it got to sleep. We need to reschedule the one we were
         // about to switch to, and correct the current coroutine pointer.
         lsched->current_coro = current;
+        errno = current->private_errno;
+
         slock();
         sched_enqueue_locked(lsched, coro);
         sunlock();
@@ -551,7 +559,10 @@ static void sched_switch_context(struct local_sched* local, struct coroutine* co
     struct coroutine* previous = sched_get_current(local);
     assert(previous != NULL);
 
+    previous->private_errno = errno;
+
     local->current_coro = coro;
+    errno = coro->private_errno;
     context_switch(&previous->context, &coro->context);
 
     // We've been switched back to - preemption is blocked before a switch
