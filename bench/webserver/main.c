@@ -133,9 +133,9 @@ static void send_http_random(int sock, size_t length, const char* content_type) 
     send_http_headers(sock, "200 OK", length, content_type);
 
 #ifdef WEBSERVER_COROUTINES
-    int random = open("/dev/random", O_RDONLY | O_NONBLOCK);
+    int random = open("/dev/urandom", O_RDONLY | O_NONBLOCK);
 #else
-    int random = open("/dev/random", O_RDONLY);
+    int random = open("/dev/urandom", O_RDONLY);
 #endif
 
     unsigned char buffer[128];

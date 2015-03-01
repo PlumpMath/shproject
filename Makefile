@@ -70,15 +70,16 @@ endif
 .PHONY: clean all
 
 
-BENCHMARKS = bench/webserver/coroserv bench/webserver/threadserv
+#
+# Benchmark targets
+#
 
-TESTSRC=$(wildcard test/*.c)
-TESTS=$(TESTSRC:.c=)
+BENCHMARKS =	bench/webserver/coroserv \
+				bench/webserver/threadserv \
+				bench/webserver/eventserv
 
 BIN=$(TESTS) $(BENCHMARKS)
-
 all : $(BIN)
-
 
 bench/webserver/coroserv.o : bench/webserver/main.c
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) -DWEBSERVER_COROUTINES $< -o $@
@@ -86,8 +87,16 @@ bench/webserver/coroserv.o : bench/webserver/main.c
 bench/webserver/threadserv.o : bench/webserver/main.c
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) -DWEBSERVER_THREADS $< -o $@
 
-bench/webserver/coroserv : bench/webserver/coroserv.o bench/http-parser/http_parser.o $(LIBOBJ)
-bench/webserver/threadserv : bench/webserver/threadserv.o bench/http-parser/http_parser.o $(LIBOBJ)
+bench/webserver/eventserv.o : bench/webserver/eventserv.c
+
+bench/webserver/eventserv : bench/webserver/eventlib.o
+
+
+$(BENCHMARKS) : bench/http-parser/http_parser.o
+
+
+TESTSRC=$(wildcard test/*.c)
+TESTS=$(TESTSRC:.c=)
 
 
 #
@@ -96,11 +105,13 @@ bench/webserver/threadserv : bench/webserver/threadserv.o bench/http-parser/http
 LIBOBJ += async.o scheduler.o util/heap.o
 
 
+bench/webserver/coroserv : $(LIBOBJ)
+
+
 #
 # Tests
 #
 $(TESTS): $(LIBOBJ)
-$(BENCHMARKS) : $(LIBOBJ)
 
 
 #
