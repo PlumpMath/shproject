@@ -19,7 +19,10 @@
 
 
 static const int PORT = 6789;
-static const int BACKLOG = 10;
+static const int BACKLOG = SOMAXCONN;
+
+
+static void on_read(struct waiter* waiter, void* buffer, ssize_t num_read);
 
 
 static inline void exit_error(const char* str) {
@@ -29,7 +32,7 @@ static inline void exit_error(const char* str) {
 
 
 static inline void exit_error_num(const char* str, int error) {
-    fprintf(stderr, "%s: %s\n", str, strerror(error));
+    fprintf(stderr, "%s: %s\n", str, strerror(-error));
     exit(EXIT_FAILURE);
 }
 
@@ -48,6 +51,7 @@ struct web_request {
     size_t url_length;
 
     bool done;
+    bool keep_alive;
 
     http_parser_settings settings;
     http_parser parser;
@@ -84,6 +88,7 @@ int on_parse_done(http_parser* parser) {
     struct web_request* request = (struct web_request*)parser->data;
     request->url[request->url_length] = '\0';
     request->done = true;
+    request->keep_alive = http_should_keep_alive(parser);
 
     return 0;
 }
@@ -100,9 +105,9 @@ static void sendf_done(struct waiter* waiter, void* buffer, ssize_t result) {
 }
 
 
-#define SENDF_BUFFER 1024
+#define SENDF_BUFFER 512
 
-static int sendf(struct web_request* request, write_cb on_done, const char* format, ...) {
+static void sendf(struct web_request* request, write_cb on_done, const char* format, ...) {
     char* buffer = malloc(SENDF_BUFFER);
     assert(buffer);
 
@@ -114,12 +119,20 @@ static int sendf(struct web_request* request, write_cb on_done, const char* form
     va_end(list);
 
     size_t length = written >= SENDF_BUFFER ? SENDF_BUFFER : written;
-    return async_send(WAITER(request), buffer, length, MSG_NOSIGNAL, sendf_done);
+    ssize_t result = async_send(WAITER(request), buffer, length, MSG_NOSIGNAL, sendf_done);
+
+    if (result < 0) {
+        exit_error_num("sendf write", result);
+    }
 }
 
 
+const char* HEADERS_CLOSE_FORMAT = "HTTP/1.1 %s\r\nDate: %s\r\nContent-Type: %s\r\nContent-Length: %zd\r\nConnection: close\r\n\r\n";
+const char* HEADERS_KEEP_ALIVE_FORMAT = "HTTP/1.1 %s\r\nDate: %s\r\nContent-Type: %s\r\nContent-Length: %zd\r\n\r\n";
+
+
 static void send_http_headers(struct web_request* request, const char* status,
-        size_t content_length, const char* content_type, write_cb on_done) {
+        size_t content_length, const char* content_type, bool keep_alive, write_cb on_done) {
     char buffer[64];
 
     time_t now = time(NULL);
@@ -132,13 +145,8 @@ static void send_http_headers(struct web_request* request, const char* status,
     assert(timestr != NULL);
     timestr[strlen(timestr) - 1] = '\0';  // Remove newline
 
-    sendf(request, on_done,
-        "HTTP/1.1 %s\r\n"
-        "Date: %s\r\n"
-        "Content-Type: %s\r\n"
-        "Content-Length: %zd\r\n"
-        "Connection: close\r\n\r\n",
-        status, timestr, content_type, content_length);
+    const char* format = keep_alive ? HEADERS_KEEP_ALIVE_FORMAT : HEADERS_CLOSE_FORMAT;
+    sendf(request, on_done, format, status, timestr, content_type, content_length);
 }
 
 
@@ -149,18 +157,22 @@ static void send_http_response_helper(struct waiter* waiter, void* buffer, ssize
         exit_error_num("send_http_headers cb", result);
     }
 
-    async_send(waiter, request->response_data, request->response_length, MSG_NOSIGNAL,
-        request->on_response_done);
+    result = async_send(waiter, request->response_data, request->response_length,
+        MSG_NOSIGNAL, request->on_response_done);
+
+    if (result < 0) {
+        exit_error_num("response_helper send", result);
+    }
 }
 
 
 static void send_http_response(struct web_request* request, const char* status,
-        void* data, size_t length, const char* content_type, write_cb on_done) {
+        void* data, size_t length, const char* content_type, bool keep_alive, write_cb on_done) {
     request->response_data = data;
     request->response_length = length;
     request->on_response_done = on_done;
 
-    send_http_headers(request, status, length, content_type, send_http_response_helper);
+    send_http_headers(request, status, length, content_type, keep_alive, send_http_response_helper);
 }
 
 
@@ -172,7 +184,6 @@ static void send_random_done(struct waiter* waiter, void* buffer, ssize_t num_wr
     }
 
     free(buffer);
-
     request->on_response_done(waiter, NULL, 0);
 }
 
@@ -215,7 +226,7 @@ static void send_http_random_helper(struct waiter* waiter, void* unused, ssize_t
 }
 
 
-static void send_http_random(struct web_request* request, size_t length, const char* content_type, write_cb on_done) {
+static void send_http_random(struct web_request* request, size_t length, const char* content_type, bool keep_alive, write_cb on_done) {
     void* buffer = malloc(length);
     assert(buffer != NULL);
 
@@ -223,11 +234,30 @@ static void send_http_random(struct web_request* request, size_t length, const c
     request->response_length = length;
     request->on_response_done = on_done;
 
-    send_http_headers(request, "200 OK", length, content_type, send_http_random_helper);
+    send_http_headers(request, "200 OK", length, content_type, keep_alive, send_http_random_helper);
 }
 
 
 const char HTML[] = "<html><head><title>Server</title></head><body><h1>they see me epollin', they hatin</h1></body></html>";
+
+
+static void next_request(struct waiter* waiter, void* buffer, ssize_t result) {
+    if (result < 0) {
+        exit_error_num("next_request", result);
+    }
+
+    // Reset the request fields for the next request.
+    struct web_request* request = REQUEST(waiter);
+    request->url_length = 0;
+    request->done = false;
+
+    ssize_t num_read = async_recv(waiter, request->read_buffer,
+        sizeof(request->read_buffer), 0, on_read);
+
+    if (num_read < 0) {
+        exit_error_num("async_recv", num_read);
+    }
+}
 
 
 static void request_done(struct waiter* waiter, void* buffer, ssize_t result) {
@@ -236,12 +266,24 @@ static void request_done(struct waiter* waiter, void* buffer, ssize_t result) {
     }
 
     struct web_request* request = REQUEST(waiter);
-    close(request->sock);
+
+    result = close(request->sock);
+    if (result != 0) {
+        exit_error("sock close");
+    }
+
     free(request);
 }
 
 
 static void on_read(struct waiter* waiter, void* buffer, ssize_t num_read) {
+    if (num_read == -EPIPE || num_read == -ECONNRESET) {
+        // Generally means we're on a keep-alive connection and the client
+        // doesn't want to make another request - but we should check.
+        request_done(waiter, NULL, 0);
+        return;
+    }
+
     if (num_read < 0) {
         exit_error_num("on_read", num_read);
     }
@@ -253,13 +295,26 @@ static void on_read(struct waiter* waiter, void* buffer, ssize_t num_read) {
 
     if (parsed != num_read) {
         const char* error = http_errno_name(request->parser.http_errno);
-        exit_error(error);
+        fprintf(stderr, "Error on socket %d: %s\n", waiter->fd, error);
+        request_done(waiter, NULL, 0);
+        return;
     }
 
-    if (parsed != 0 && !request->done) {
+    if (parsed == 0 && !request->done) {
+        // Client closed the connection. If they've already made a request and
+        // this is a keep-alive connection, that's fine. We should check.
+        request_done(waiter, NULL, 0);
+        return;
+    }
+
+    if (!request->done) {
         // Keep reading
-        async_recv(waiter, request->read_buffer, sizeof(request->read_buffer), 0,
+        num_read = async_recv(waiter, request->read_buffer, sizeof(request->read_buffer), 0,
             on_read);
+
+        if (num_read < 0) {
+            exit_error_num("async_recv on_read", num_read);
+        }
         return;
     }
 
@@ -269,12 +324,14 @@ static void on_read(struct waiter* waiter, void* buffer, ssize_t num_read) {
         false, &parsed_url);
     assert(result == 0);
 
+    write_cb on_done = request->keep_alive ? next_request : request_done;
+
     if (request->parser.method == HTTP_GET) {
-        //send_http_response(request, "200 Seek", (void*)HTML, sizeof(HTML), "text/html", request_done);
-        send_http_random(request, 1024, "text/plain", request_done);
+        send_http_response(request, "200 Seek", (void*)HTML, sizeof(HTML),
+            "text/html", request->keep_alive, on_done);
     } else {
         send_http_response(request, "405 Method Not Allowed", "", 0,
-            "text/plain", request_done);
+            "text/plain", request->keep_alive, on_done);
     }
 }
 
@@ -284,10 +341,24 @@ static void on_accept(struct waiter* waiter, int sock) {
         exit_error_num("on_accept", sock);
     }
 
+    // Kick off the accept again straight away so it can be serviced
+    // by another thread.
+    int error = async_accept(waiter, on_accept);
+    if (error < 0) {
+        exit_error_num("async_accept on_accept", error);
+    }
+
+    int reuse = 1;
+    int result = setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse));
+    if (result == -1) {
+        exit_error("setsockopt SO_REUSEADDR");
+    }
+
     struct web_request* request = malloc(sizeof(*request));
     assert(request != NULL);
 
     async_init_waiter(&request->waiter, waiter->loop, sock);
+    request->sock = sock;
     request->url_length = 0;
     request->done = false;
 
@@ -304,11 +375,7 @@ static void on_accept(struct waiter* waiter, int sock) {
     if (num_read < 0) {
         exit_error_num("async_recv", num_read);
     }
-
-    // And kick off the accept again
-    async_accept(waiter, on_accept);
 }
-
 
 
 
@@ -377,7 +444,10 @@ int main() {
     struct waiter waiter;
     async_init_waiter(&waiter, &server.loop, server.sock);
 
-    async_accept(&waiter, on_accept);
+    int error = async_accept(&waiter, on_accept);
+    if (error < 0) {
+        exit_error_num("async_accept on_accept", error);
+    }
 
     main_loop((void*)&server);
     return 0;

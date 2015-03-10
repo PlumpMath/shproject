@@ -9,7 +9,7 @@
 #include <webserver/eventlib.h>
 
 
-#define MAX_EVENTS 20
+#define MAX_EVENTS 128
 
 
 static void arm_waiter(struct waiter* waiter, uint32_t events);
