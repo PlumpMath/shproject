@@ -35,7 +35,9 @@ static inline void list_node_init(struct list_node* node) {
 
 
 static inline int list_empty(struct list_node* list) {
+#ifdef DEBUG
     assert(list->next != NULL && list->prev != NULL);
+#endif
     return list->next == list;
 }
 
@@ -46,20 +48,26 @@ static inline int list_in_list(struct list_node* node) {
 
 
 static inline struct list_node* list_front(struct list_node* list) {
+#ifdef DEBUG
     assert(list->next != NULL && list->prev != NULL);
+#endif
     return list->next;
 }
 
 
 static inline struct list_node* list_back(struct list_node* list) {
+#ifdef DEBUG
     assert(list->next != NULL && list->prev != NULL);
+#endif
     return list->prev;
 }
 
 
 static inline void list_insert(struct list_node* after, struct list_node* item) {
+#ifdef DEBUG
     assert(after->next != NULL && after->prev != NULL);
     assert(after != item);
+#endif
     item->next = after->next;
     item->prev = after;
     after->next = item;
@@ -68,7 +76,9 @@ static inline void list_insert(struct list_node* after, struct list_node* item) 
 
 
 static inline void list_remove(struct list_node* item) {
+#ifdef DEBUG
     assert(item->next != NULL && item->prev != NULL);
+#endif
     item->prev->next = item->next;
     item->next->prev = item->prev;
     item->prev = NULL;
@@ -87,7 +97,9 @@ static inline void list_push_back(struct list_node* list, struct list_node* entr
 
 
 static inline struct list_node* list_pop_front(struct list_node* list) {
+#ifdef DEBUG
     assert(!list_empty(list));
+#endif
     struct list_node* front = list->next;
     list_remove(front);
     return front;
@@ -95,7 +107,9 @@ static inline struct list_node* list_pop_front(struct list_node* list) {
 
 
 static inline struct list_node* list_pop_back(struct list_node* list) {
+#ifdef DEBUG
     assert(!list_empty(list));
+#endif
     struct list_node* back = list->prev;
     list_remove(back);
     return back;

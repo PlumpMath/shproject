@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include <fcntl.h>
+#include <limits.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -22,7 +23,7 @@
 
 
 static const int PORT = 6789;
-static const int BACKLOG = 10;
+static const int BACKLOG = SOMAXCONN;
 
 
 static inline void exit_error(const char* str) {
@@ -58,6 +59,7 @@ struct web_request {
     size_t url_length;
 
     bool done;
+    bool keep_alive;
 };
 
 
@@ -80,13 +82,14 @@ int on_done(http_parser* parser) {
     struct web_request* request = (struct web_request*)parser->data;
     request->url[request->url_length] = '\0';
     request->done = true;
+    request->keep_alive = http_should_keep_alive(parser);
 
     return 0;
 }
 
 
 static int sendf(int sock, const char* format, ...) {
-    char buffer[128];
+    char buffer[256];
 
     va_list list;
     va_start(list, format);
@@ -98,8 +101,12 @@ static int sendf(int sock, const char* format, ...) {
 }
 
 
-static void send_http_headers(int sock, const char* status,
-       size_t content_length, const char* content_type) {
+const char* HEADERS_CLOSE_FORMAT = "HTTP/1.1 %s\r\nDate: %s\r\nContent-Type: %s\r\nContent-Length: %zd\r\nConnection: close\r\n\r\n";
+const char* HEADERS_KEEP_ALIVE_FORMAT = "HTTP/1.1 %s\r\nDate: %s\r\nContent-Type: %s\r\nContent-Length: %zd\r\n\r\n";
+
+
+static void send_http_headers(int sock, const char* status, size_t content_length,
+        const char* content_type, bool keep_alive) {
     char buffer[64];
 
     time_t now = time(NULL);
@@ -112,25 +119,28 @@ static void send_http_headers(int sock, const char* status,
     assert(timestr != NULL);
     timestr[strlen(timestr) - 1] = '\0';  // Remove newline
 
-    sendf(sock, "HTTP/1.1 %s\r\n", status);
-    sendf(sock, "Date: %s\r\n", timestr);
-    sendf(sock, "Content-Type: %s\r\n", content_type);
-    sendf(sock, "Content-Length: %zd\r\n", content_length);
-    sendf(sock, "Connection: close\r\n\r\n");
+    const char* format = keep_alive ? HEADERS_KEEP_ALIVE_FORMAT : HEADERS_CLOSE_FORMAT;
+    int result = sendf(sock, format, status, timestr, content_type, content_length);
+
+    if (result != 0) {
+        exit_error("sendf");
+    }
 }
 
 
 static void send_http_response(int sock, const char* status, const void* data,
-        size_t length, const char* content_type) {
-    send_http_headers(sock, status, length, content_type);
+        size_t length, const char* content_type, bool keep_alive) {
+    send_http_headers(sock, status, length, content_type, keep_alive);
 
     int result = send_all(sock, data, length);
-    assert(result == 0);
+    if (result != 0) {
+        exit_error("send_all");
+    }
 }
 
 
 static void send_http_random(int sock, size_t length, const char* content_type) {
-    send_http_headers(sock, "200 OK", length, content_type);
+    send_http_headers(sock, "200 OK", length, content_type, false);
 
 #ifdef WEBSERVER_COROUTINES
     int random = open("/dev/urandom", O_RDONLY | O_NONBLOCK);
@@ -175,6 +185,33 @@ static void send_http_random(int sock, size_t length, const char* content_type) 
 const char HTML[] = "<html><head><title>Server</title></head><body><h1>they see me epollin', they hatin</h1></body></html>";
 
 
+static ssize_t read_and_parse(int sock, struct web_request* request,
+        http_parser* parser, http_parser_settings* settings) {
+    char buf[256];
+
+    while (true) {
+#ifdef WEBSERVER_COROUTINES
+        ssize_t num_read = async_recv(sock, buf, sizeof(buf), 0);
+#else
+        ssize_t num_read = recv(sock, buf, sizeof(buf), 0);
+#endif
+        if (num_read == -1) {
+            exit_error("async_recv (server)");
+        }
+
+        size_t parsed = http_parser_execute(parser, settings, buf, num_read);
+        if (parsed != num_read) {
+            const char* error = http_errno_name(parser->http_errno);
+            fprintf(stderr, "Error parsing socket %d: %s\n", sock, error);
+            return -1;
+        }
+
+        if (parsed == 0 || request->done) {
+            return parsed;
+        }
+    }
+}
+
 
 void* server_handler_coro(void* sock_ptr) {
     int sock = (int)(intptr_t)sock_ptr;
@@ -190,43 +227,34 @@ void* server_handler_coro(void* sock_ptr) {
     struct web_request* request = malloc(sizeof(struct web_request));
     assert(request != NULL);
 
-    request->url[0] = '\0';
-    request->url_length = 0;
-    request->done = false;
+    request->keep_alive = true;
     parser.data = request;
 
-    while (true) {
-        char buf[256];
+    while (request->keep_alive) {
+        request->url[0] = '\0';
+        request->url_length = 0;
+        request->done = false;
+        request->keep_alive = false;
 
-#ifdef WEBSERVER_COROUTINES
-        ssize_t num_read = async_recv(sock, buf, sizeof(buf), 0);
-#else
-        ssize_t num_read = recv(sock, buf, sizeof(buf), 0);
-#endif
-        if (num_read == -1) {
-            exit_error("async_recv (server)");
-        }
-
-        size_t parsed = http_parser_execute(&parser, &settings, buf, num_read);
-        if (parsed != num_read) {
-            const char* error = http_errno_name(parser.http_errno);
-            exit_error(error);  // TODO: might not want to exit
-        }
-
-        if (parsed == 0 || request->done) {
+        ssize_t result = read_and_parse(sock, request, &parser, &settings);
+        if (result == -1 || (result == 0 && !request->done)) {
+            // Some non-fatal error - or peer closure
             break;
         }
-    }
 
-    struct http_parser_url parsed_url = {0};
-    int result = http_parser_parse_url(request->url, request->url_length,
-        false, &parsed_url);
-    assert(result == 0);
+        // Should be the case now after read_and_parse
+        assert(request->done);
 
-    if (parser.method == HTTP_GET) {
-        send_http_random(sock, 1024, "text/plain");
-    } else {
-        send_http_response(sock, "405 Method Not Allowed", "", 0, "text/plain");
+        struct http_parser_url parsed_url = {0};
+        result = http_parser_parse_url(request->url, request->url_length,
+            false, &parsed_url);
+        assert(result == 0);
+
+        if (parser.method == HTTP_GET) {
+            send_http_response(sock, "200 Seek", (void*)HTML, sizeof(HTML), "text/html", request->keep_alive);
+        } else {
+            send_http_response(sock, "405 Method Not Allowed", "", 0, "text/plain", request->keep_alive);
+        }
     }
 
     free(request);
@@ -246,7 +274,13 @@ static void create_thread(void* (*func)(void*), void* arg) {
     result = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     assert(result == 0);
 
+    result = pthread_attr_setstacksize(&attr, PTHREAD_STACK_MIN);
+    assert(result == 0);
+
     result = pthread_create(&thread, &attr, func, arg);
+    if (result != 0) {
+        perror("pthread_create");
+    }
     assert(result == 0);
 }
 #endif

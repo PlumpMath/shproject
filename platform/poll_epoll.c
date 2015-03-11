@@ -8,7 +8,7 @@
 #include <sys/epoll.h>
 
 
-#define MAX_EVENTS 64
+#define MAX_EVENTS 128
 
 
 /*
