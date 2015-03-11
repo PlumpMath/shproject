@@ -176,68 +176,6 @@ static void send_http_response(struct web_request* request, const char* status,
 }
 
 
-static void send_random_done(struct waiter* waiter, void* buffer, ssize_t num_written) {
-    struct web_request* request = REQUEST(waiter);
-
-    if (num_written < 0) {
-        exit_error_num("send_random cb", num_written);
-    }
-
-    free(buffer);
-    request->on_response_done(waiter, NULL, 0);
-}
-
-
-static void send_http_random_helper(struct waiter* waiter, void* unused, ssize_t num_written) {
-    struct web_request* request = REQUEST(waiter);
-
-    if (num_written < 0) {
-        exit_error_num("send_http_headers cb", num_written);
-    }
-
-    unsigned char* buffer = (unsigned char*)request->response_data;
-    size_t random_size = request->response_length;
-
-    int random_fd = open("/dev/urandom", O_RDONLY);
-    if (random_fd < 0) {
-        exit_error("open(/dev/urandom)");
-    }
-
-    // Don't bother with asynchronicity here to save on callback chaining
-    size_t num_read = 0;
-    while (num_read < random_size) {
-        size_t to_read = random_size - num_read;
-        ssize_t nread = read(random_fd, buffer + num_read, to_read);
-        if (nread < 0) {
-            fprintf(stderr, "Error reading from random: %s.\n", strerror(errno));
-            close(random_fd);
-            return;
-        }
-
-        for (size_t i = num_read; i < num_read + nread; i++) {
-            buffer[i] = '0' + (buffer[i] % ('Z' - '0' + 1));
-        }
-        num_read += nread;
-    }
-
-    close(random_fd);
-
-    async_send(waiter, buffer, random_size, MSG_NOSIGNAL, send_random_done);
-}
-
-
-static void send_http_random(struct web_request* request, size_t length, const char* content_type, bool keep_alive, write_cb on_done) {
-    void* buffer = malloc(length);
-    assert(buffer != NULL);
-
-    request->response_data = buffer;
-    request->response_length = length;
-    request->on_response_done = on_done;
-
-    send_http_headers(request, "200 OK", length, content_type, keep_alive, send_http_random_helper);
-}
-
-
 const char HTML[] = "<html><head><title>Server</title></head><body><h1>they see me epollin', they hatin</h1></body></html>";
 
 

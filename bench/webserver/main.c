@@ -139,49 +139,6 @@ static void send_http_response(int sock, const char* status, const void* data,
 }
 
 
-static void send_http_random(int sock, size_t length, const char* content_type) {
-    send_http_headers(sock, "200 OK", length, content_type, false);
-
-#ifdef WEBSERVER_COROUTINES
-    int random = open("/dev/urandom", O_RDONLY | O_NONBLOCK);
-#else
-    int random = open("/dev/urandom", O_RDONLY);
-#endif
-
-    unsigned char buffer[128];
-
-    size_t sent = 0;
-    while (sent < length) {
-        size_t to_read = length - sent;
-        to_read = to_read > sizeof(buffer) ? sizeof(buffer) : to_read;
-
-#ifdef WEBSERVER_COROUTINES
-        ssize_t nread = async_read(random, buffer, to_read);
-#else
-        ssize_t nread = read(random, buffer, to_read);
-#endif
-        if (nread < 0) {
-            fprintf(stderr, "Error reading from random: %s.\n", strerror(errno));
-            close(random);
-            return;
-        }
-
-        for (size_t i = 0; i < nread; i++) {
-            buffer[i] = '0' + (buffer[i] % ('Z' - '0' + 1));
-        }
-        int result = send_all(sock, buffer, nread);
-        if (result != 0) {
-            fprintf(stderr, "Write error on sock %d: %s\n", sock, strerror(errno));
-            break;
-        }
-        assert(result == 0);
-        sent += nread;
-    }
-
-    close(random);
-}
-
-
 const char HTML[] = "<html><head><title>Server</title></head><body><h1>they see me epollin', they hatin</h1></body></html>";
 
 
