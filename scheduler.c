@@ -21,8 +21,13 @@ static const size_t DEFAULT_STACK = 4 * 4096;
 
 #define glock()     mutex_lock(&gsched->lock)
 #define gunlock()   mutex_unlock(&gsched->lock)
+#ifdef SCHED_WORK_STEALING
 #define slock()     mutex_lock(&lsched->lock)
 #define sunlock()   mutex_unlock(&lsched->lock)
+#else
+#define slock()
+#define sunlock()
+#endif
 
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -56,8 +61,10 @@ struct local_sched {
     unsigned int preempt_lock;
     struct mutex lock;
 
+#ifdef SCHED_PREEMPTION
     struct platform_sched platform_sched;
     bool platform_sched_initialised;
+#endif
 
     char death_stack[4096];
 };
@@ -120,21 +127,31 @@ static struct coroutine* sched_get_current(struct local_sched* sched);
 static void sched_prepare_to_suspend();
 
 
+#ifdef SCHED_PREEMPTION
+
 static inline void sched_block_preempt(struct local_sched* sched) {
     assert(!sched->preempt_lock);
     sched->preempt_lock = 1;
-    __sync_synchronize();
+    __atomic_signal_fence(__ATOMIC_RELEASE);
 }
 
 static inline void sched_unblock_preempt(struct local_sched* sched) {
     assert(sched->preempt_lock);
     sched->preempt_lock = 0;
-    __sync_synchronize();
+    __atomic_signal_fence(__ATOMIC_RELEASE);
 }
 
 static inline int sched_can_preempt(struct local_sched* sched) {
     return sched->preempt_lock == 0;
 }
+
+#else
+
+#define sched_block_preempt(x)
+#define sched_unblock_preempt(x)
+#define sched_can_preempt(x) (1)
+
+#endif
 
 
 /*
@@ -252,7 +269,10 @@ static struct local_sched* sched_new_local() {
     list_node_init(&coro->list);
     local->current_coro = coro;
 
+#ifdef SCHED_PREEMPTION
     local->platform_sched_initialised = false;
+#endif
+
     return local;
 }
 
@@ -261,7 +281,7 @@ static struct local_sched* sched_new_local() {
  * Internal call to initialise the scheduler.
  */
 static void sched_init() {
-    if (lsched != NULL) {
+    if (__builtin_expect(lsched != NULL, 1)) {
         return;
     }
 
@@ -286,9 +306,11 @@ static void sched_init() {
 
     sched_enqueue_locked(local, local->event_loop_coro);
 
+#ifdef SCHED_PREEMPTION
     int result = platform_sched_init(&local->platform_sched);
     assert(result == 0);
     local->platform_sched_initialised = true;
+#endif
 }
 
 
@@ -296,10 +318,12 @@ static void* sched_loop(void* arg) {
     struct local_sched* sched = (struct local_sched*)arg;
     lsched = sched;  // Set the local scheduler for this thread in TLS.
 
+#ifdef SCHED_PREEMPTION
     if (!sched->platform_sched_initialised) {
         int result = platform_sched_init(&sched->platform_sched);
         assert(result == 0);
     }
+#endif
 
     for (;;) {
         long timeout = sched_poll_timeout(gsched, sched);
@@ -656,6 +680,7 @@ static struct coroutine* sched_make_coro(void* (*start)(void*), void* arg) {
     coro->state = STATE_BLOCKED;
     coro->start = start;
     coro->arg = arg;
+    coro->private_errno = 0;
     return coro;
 }
 
@@ -687,4 +712,19 @@ fast_path:
     sched_enqueue_locked(local, coro);
     sched_local_start_thread(local);
     return coro;
+}
+
+
+/*
+ * Bit of a hack -- glibc's errno expands to (*__errno_location()) - where
+ * __errno_location is a function with the __const__ attribute.
+ * This means that the errno location can be stored in a register across a
+ * function call that might reschedule the coroutine on another thread (thus
+ * changing the address of errno).
+ *
+ * This wrapper is not marked __const__ and thus avoids the problem. Being
+ * in a different translation unit, GCC will be forced to recall it.
+ */
+int* sched_get_errno() {
+    return &errno;
 }

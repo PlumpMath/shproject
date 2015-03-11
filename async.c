@@ -48,7 +48,7 @@ void async_sleep_absolute(const struct timespec* time) {
     do {                                                                      \
         int revents = sched_event_wait(fd, events);                           \
         if ((revents & WAITERR) != 0) {                                       \
-            errno = socket_errno(fd);                                         \
+            sched_errno = socket_errno(fd);                                   \
             return -1;                                                        \
         }                                                                     \
     } while (0);                                                              \
@@ -61,7 +61,7 @@ ssize_t async_read(int fd, void* buffer, size_t length) {
             return num_read;
         }
 
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (sched_errno == EAGAIN || sched_errno == EWOULDBLOCK) {
             WAIT_RETURN_SOCKET_ERROR(fd, WAITIN);
         } else {
             return -1;
@@ -77,7 +77,7 @@ ssize_t async_write(int fd, void* buffer, size_t length) {
             return num_written;
         }
 
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (sched_errno == EAGAIN || sched_errno == EWOULDBLOCK) {
             WAIT_RETURN_SOCKET_ERROR(fd, WAITOUT);
         } else {
             return -1;
@@ -105,7 +105,7 @@ int async_accept(int socket, struct sockaddr* address, socklen_t* length) {
             return new_sock;
         }
 
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (sched_errno == EAGAIN || sched_errno == EWOULDBLOCK) {
             WAIT_RETURN_SOCKET_ERROR(socket, WAITIN);
         } else {
             return -1;
@@ -121,7 +121,7 @@ int async_connect(int socket, const struct sockaddr* address, socklen_t length) 
         return 0;
     }
 
-    if (errno != EINPROGRESS) {
+    if (sched_errno != EINPROGRESS) {
         return -1;
     }
 
@@ -129,7 +129,7 @@ int async_connect(int socket, const struct sockaddr* address, socklen_t length) 
 
     int error = socket_errno(socket);
     if (error != 0) {
-        errno = error;
+        sched_errno = error;
         return -1;
     }
     return 0;
@@ -143,7 +143,7 @@ ssize_t async_send(int socket, const void* buffer, size_t length, int flags) {
             return num_written;
         }
 
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (sched_errno == EAGAIN || sched_errno == EWOULDBLOCK) {
             WAIT_RETURN_SOCKET_ERROR(socket, WAITOUT);
         } else {
             return -1;
@@ -159,7 +159,7 @@ ssize_t async_recv(int socket, void* buffer, size_t length, int flags) {
             return num_read;
         }
 
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (sched_errno == EAGAIN || sched_errno == EWOULDBLOCK) {
             WAIT_RETURN_SOCKET_ERROR(socket, WAITIN);
         } else {
             return -1;

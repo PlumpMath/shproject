@@ -4,18 +4,18 @@ AS = gcc
 
 
 ASFLAGS += -Wall
-CFLAGS += -std=c99 -MMD -MP -Wall
+CFLAGS += -std=c99 -MMD -MP -Wall -Wno-unused
 CPPFLAGS += -I. -I./bench
 
+LDFLAGS +=
 
 ifeq ($(DEBUG), 1)
-	CFLAGS += -g
+	CFLAGS += -g -DDEBUG
+	LDFLAGS += -g
 else
 	CFLAGS += -O2
 endif
 
-
-LDFLAGS =
 
 
 # Override for Windows

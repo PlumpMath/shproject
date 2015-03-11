@@ -60,4 +60,12 @@ extern void sched_poll_event(void* key, uint32_t revents);
 extern void sched_resched_callback();
 
 
+/*
+ * See comments in scheduler.c for why this is necessary.
+ */
+extern int* sched_get_errno();
+
+#define sched_errno (*sched_get_errno())
+
+
 #endif
