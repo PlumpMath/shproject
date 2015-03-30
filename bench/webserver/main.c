@@ -21,6 +21,10 @@
 
 #include <http-parser/http_parser.h>
 
+#ifdef WEBSERVER_THREADS
+#define sched_errno errno
+#endif
+
 
 static const int PORT = 6789;
 static const int BACKLOG = SOMAXCONN;
@@ -133,7 +137,7 @@ static void send_http_response(int sock, const char* status, const void* data,
     send_http_headers(sock, status, length, content_type, keep_alive);
 
     int result = send_all(sock, data, length);
-    if (result != 0) {
+    if (result != 0 && sched_errno != ECONNRESET && sched_errno != EPIPE) {
         exit_error("send_all");
     }
 }
@@ -153,6 +157,9 @@ static ssize_t read_and_parse(int sock, struct web_request* request,
         ssize_t num_read = recv(sock, buf, sizeof(buf), 0);
 #endif
         if (num_read == -1) {
+            if (sched_errno == EPIPE || sched_errno == ECONNRESET) {
+                return -1;
+            }
             exit_error("async_recv (server)");
         }
 
