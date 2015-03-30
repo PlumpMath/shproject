@@ -23,6 +23,7 @@ static const int BACKLOG = SOMAXCONN;
 
 
 static void on_read(struct waiter* waiter, void* buffer, ssize_t num_read);
+static void request_done(struct waiter* waiter, void* buffer, ssize_t result);
 
 
 static inline void exit_error(const char* str) {
@@ -57,8 +58,8 @@ struct web_request {
     http_parser parser;
 
     char read_buffer[512];
+    char sendf_buffer[512];
 
-    write_cb on_sendf_done;
     void* response_data;
     size_t response_length;
     write_cb on_response_done;
@@ -94,36 +95,16 @@ int on_parse_done(http_parser* parser) {
 }
 
 
-static void sendf_done(struct waiter* waiter, void* buffer, ssize_t result) {
-    if (result < 0) {
-        exit_error_num("sendf cb", result);
-    }
-
-    free(buffer);
-    struct web_request* request = REQUEST(waiter);
-    request->on_sendf_done(waiter, NULL, 0);
-}
-
-
-#define SENDF_BUFFER 512
-
-static void sendf(struct web_request* request, write_cb on_done, const char* format, ...) {
-    char* buffer = malloc(SENDF_BUFFER);
-    assert(buffer);
-
-    request->on_sendf_done = on_done;
+static ssize_t sendf(struct web_request* request, write_cb on_done, const char* format, ...) {
+    size_t maxlen = sizeof(request->sendf_buffer);
 
     va_list list;
     va_start(list, format);
-    size_t written = vsnprintf(buffer, SENDF_BUFFER, format, list);
+    size_t written = vsnprintf(request->sendf_buffer, maxlen, format, list);
     va_end(list);
 
-    size_t length = written >= SENDF_BUFFER ? SENDF_BUFFER : written;
-    ssize_t result = async_send(WAITER(request), buffer, length, MSG_NOSIGNAL, sendf_done);
-
-    if (result < 0) {
-        exit_error_num("sendf write", result);
-    }
+    size_t length = written >= maxlen ? maxlen : written;
+    return async_send(WAITER(request), request->sendf_buffer, length, MSG_NOSIGNAL, on_done);
 }
 
 
@@ -131,7 +112,7 @@ const char* HEADERS_CLOSE_FORMAT = "HTTP/1.1 %s\r\nDate: %s\r\nContent-Type: %s\
 const char* HEADERS_KEEP_ALIVE_FORMAT = "HTTP/1.1 %s\r\nDate: %s\r\nContent-Type: %s\r\nContent-Length: %zd\r\n\r\n";
 
 
-static void send_http_headers(struct web_request* request, const char* status,
+static ssize_t send_http_headers(struct web_request* request, const char* status,
         size_t content_length, const char* content_type, bool keep_alive, write_cb on_done) {
     char buffer[64];
 
@@ -146,7 +127,7 @@ static void send_http_headers(struct web_request* request, const char* status,
     timestr[strlen(timestr) - 1] = '\0';  // Remove newline
 
     const char* format = keep_alive ? HEADERS_KEEP_ALIVE_FORMAT : HEADERS_CLOSE_FORMAT;
-    sendf(request, on_done, format, status, timestr, content_type, content_length);
+    return sendf(request, on_done, format, status, timestr, content_type, content_length);
 }
 
 
@@ -161,7 +142,7 @@ static void send_http_response_helper(struct waiter* waiter, void* buffer, ssize
         MSG_NOSIGNAL, request->on_response_done);
 
     if (result < 0) {
-        exit_error_num("response_helper send", result);
+        request_done(waiter, NULL, result);
     }
 }
 
@@ -172,7 +153,10 @@ static void send_http_response(struct web_request* request, const char* status,
     request->response_length = length;
     request->on_response_done = on_done;
 
-    send_http_headers(request, status, length, content_type, keep_alive, send_http_response_helper);
+    ssize_t result = send_http_headers(request, status, length, content_type, keep_alive, send_http_response_helper);
+    if (result < 0) {
+        request_done(WAITER(request), NULL, result);
+    }
 }
 
 
@@ -193,14 +177,14 @@ static void next_request(struct waiter* waiter, void* buffer, ssize_t result) {
         sizeof(request->read_buffer), 0, on_read);
 
     if (num_read < 0) {
-        exit_error_num("async_recv", num_read);
+        request_done(waiter, NULL, num_read);
     }
 }
 
 
 static void request_done(struct waiter* waiter, void* buffer, ssize_t result) {
-    if (result < 0) {
-        exit_error_num("on_read", result);
+    if (result < 0 && result != -EPIPE && result != -ECONNRESET) {
+        exit_error_num("request_done cb", result);
     }
 
     struct web_request* request = REQUEST(waiter);
@@ -251,7 +235,7 @@ static void on_read(struct waiter* waiter, void* buffer, ssize_t num_read) {
             on_read);
 
         if (num_read < 0) {
-            exit_error_num("async_recv on_read", num_read);
+            request_done(waiter, NULL, num_read);
         }
         return;
     }
