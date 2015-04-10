@@ -1,6 +1,7 @@
-CC = gcc
+CC ?= gcc
 LD = gcc
 AS = gcc
+AR = ar
 
 
 ASFLAGS += -Wall
@@ -9,6 +10,11 @@ CPPFLAGS += -I. -I./bench
 
 LDFLAGS +=
 
+
+SHARED_LIB = liblwthread.so
+STATIC_LIB = liblwthread.a
+
+
 ifeq ($(DEBUG), 1)
 	CFLAGS += -g -DDEBUG
 	LDFLAGS += -g
@@ -16,6 +22,10 @@ else
 	CFLAGS += -O2
 endif
 
+
+ifeq ($(PREEMPTION), 1)
+	CPPFLAGS += -DSCHED_PREEMPTION
+endif
 
 
 # Override for Windows
@@ -79,7 +89,8 @@ BENCHMARKS =	bench/webserver/coroserv \
 				bench/webserver/eventserv
 
 BIN=$(TESTS) $(BENCHMARKS)
-all : $(BIN)
+
+all : $(BIN) $(SHARED_LIB) $(STATIC_LIB)
 
 bench/webserver/coroserv.o : bench/webserver/main.c
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) -DWEBSERVER_COROUTINES $< -o $@
@@ -106,6 +117,13 @@ LIBOBJ += async.o scheduler.o util/heap.o
 
 
 bench/webserver/coroserv : $(LIBOBJ)
+
+
+$(STATIC_LIB) : $(LIBOBJ)
+	$(AR) rcs $@ $<
+
+$(SHARED_LIB) : $(LIBOBJ)
+	$(CC) $(LDFLAGS) -o $@ -shared $<
 
 
 #
@@ -138,9 +156,10 @@ clean:
 # Dependency file generation
 #
 SRC=$(wildcard *.c) $(wildcard platform/*.c) $(wildcard test/*.c) $(wildcard util/*.c) \
-	$(wildcard bench/webserver/*.c) $(wildcard bench/http-parser/*.c)
+	$(wildcard bench/webserver/*.c) $(wildcard bench/http-parser/*.c) $(wildcard arch/*.S)
 
-OBJ=$(SRC:.c=.o)
+COBJ=$(SRC:.c=.o)
+OBJ=$(COBJ:.S=.o)
 DEP=$(OBJ:.o=.d)
 
 -include $(DEP)
