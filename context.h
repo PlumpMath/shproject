@@ -32,8 +32,8 @@ extern void _context_create(struct context*, void (*fn)(void*), void* stack_top)
  */
 static inline void
 context_create(struct context* context, void (*fn)(void*), size_t stack_size) {
-    void* stack = mmap(NULL, stack_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    assert(stack != MAP_FAILED);
+    void* stack = malloc(stack_size);
+    assert(stack != NULL);
 
     context->stack = stack;
     context->stack_size = stack_size;
@@ -93,8 +93,7 @@ static inline void context_empty(struct context* context) {
  * Destroy a context, freeing all resources associated with it.
  */
 static inline void context_free(struct context* context) {
-    int result = munmap(context->stack, context->stack_size);
-    assert(result == 0);
+    free(context->stack);
 }
 
 
