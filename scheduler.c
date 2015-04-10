@@ -487,6 +487,8 @@ static void sched_prepare_to_suspend() {
 void sched_suspend() {
     sched_init();
 
+    sched_block_preempt(lsched);
+
     struct coroutine* current = sched_get_current(lsched);
 
     bool switched_back = context_save(&current->context);
@@ -494,8 +496,6 @@ void sched_suspend() {
         slock();
         struct coroutine* coro = sched_dequeue_locked(lsched);
         sunlock();
-
-        sched_block_preempt(lsched);
 
         current->private_errno = errno;
         lsched->current_coro = coro;
