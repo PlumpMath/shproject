@@ -27,6 +27,10 @@ ifeq ($(PREEMPTION), 1)
 	CPPFLAGS += -DSCHED_PREEMPTION
 endif
 
+ifeq ($(SHARED), 1)
+	CFLAGS += -fPIC
+endif
+
 
 # Override for Windows
 LOCK_POSIX = 1
@@ -90,7 +94,10 @@ BENCHMARKS =	bench/webserver/coroserv \
 
 BIN=$(TESTS) $(BENCHMARKS)
 
-all : $(BIN) $(SHARED_LIB) $(STATIC_LIB)
+all : $(BIN) $(STATIC_LIB)
+ifeq ($(SHARED), 1)
+all : $(SHARED_LIB)
+endif
 
 bench/webserver/coroserv.o : bench/webserver/main.c
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) -DWEBSERVER_COROUTINES $< -o $@
@@ -120,10 +127,10 @@ bench/webserver/coroserv : $(LIBOBJ)
 
 
 $(STATIC_LIB) : $(LIBOBJ)
-	$(AR) rcs $@ $<
+	$(AR) rcs $@ $^
 
 $(SHARED_LIB) : $(LIBOBJ)
-	$(CC) $(LDFLAGS) -o $@ -shared $<
+	$(CC) $(LDFLAGS) -o $@ -shared $^
 
 
 #
@@ -136,7 +143,7 @@ $(TESTS): $(LIBOBJ)
 # Clean
 #
 clean:
-	rm -f $(BIN) $(OBJ) $(DEP)
+	rm -f $(BIN) $(OBJ) $(DEP) $(STATIC_LIB) $(SHARED_LIB)
 
 
 #
