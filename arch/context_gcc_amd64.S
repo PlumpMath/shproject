@@ -33,6 +33,7 @@ FUNCTION(context_save):
 
 
 FUNCTION(context_restore):
+.local_restore:
     // Restore all the callee-saved registers
     movq 0(%rdi), %rbx;
     movq 8(%rdi), %rbp;
@@ -53,5 +54,5 @@ FUNCTION(context_restore):
 FUNCTION(context_cmpxchg_restore):
     movl %edx, %eax;
     lock cmpxchg %ecx, 0(%rsi);
-    jz   context_restore;
+    jz   .local_restore;
     ret;
